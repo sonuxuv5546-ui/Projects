@@ -13,3 +13,33 @@ while guess != number:
         print("Guess lower!")
     else:
         print("You won!") 
+
+---------------------------------------------------------------------------
+
+import random
+
+words = ['python', 'javascript', 'java', 'automation', 'pytest', 'guvi', 'selenium']
+
+word = random.choice(words)
+
+scrambled = list(word)
+random.shuffle(scrambled)
+scrambled_word = ''.join(scrambled)
+
+print("Word Scramble Game")
+print("Unscramble the word:", scrambled_word)
+
+while True:
+    guess = input("Enter your guess: ").lower()
+
+    if guess == word:
+        print("You won! Correct answer:", word)
+        break
+    else:
+        print("Wrong guess! Try again.")
+
+----------------------------------------------------------------------------------------------------
+
+
+
+

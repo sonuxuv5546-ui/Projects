@@ -1,1 +1,48 @@
+people = [
+    {"name": "Sohan", "age": 25},
+    {"name": "Rahul", "age": 16},
+    {"name": "Priya", "age": 22},
+    {"name": "Amit", "age": 15},
+    {"name": "Neha", "age": 30}
+]
+
+adults = filter(lambda person: person["age"] >= 18, people)
+
+names = list(map(lambda person: person["name"], adults))
+
+print("People aged 18 or above:", names)
+------------------------------------------------------------------------------
+
+from functools import reduce
+numbers = [2, 3, 4, 5]
+
+product = reduce(lambda x, y: x * y, numbers)
+
+print("The product is:", product)
+----------------------------------------------------------------------------------
+
+numbers = [1, 2, 3, 4, 5, 6]
+is_even = lambda x: x % 2 == 0
+even_squares = [x**2 for x in numbers if is_even(x)]
+print("Squares of even numbers:", even_squares)
+-----------------------------------------------------------------------------------
+
+is_number = lambda s: s.isdigit()
+print(is_number("123"))   # True
+print(is_number("abc"))   # False
+print(is_number("-12"))   # False (does not handle negative signs)
+------------------------------------------------------------------------------------------------
+
+import datetime
+current_date = datetime.datetime.now()
+extract_ymd = lambda dt: (dt.year, dt.month, dt.day)
+year, month, day = extract_ymd(current_date)
+print(f"Year: {year}, Month: {month}, Day: {day}")
+-------------------------------------------------------------------------------------------------
+
+from functools import reduce
+fibonacci = lambda n: reduce(lambda x, _: x + [x[-1] + x[-2]], range(n - 2), [0, 1])[:n] if n > 0 else []
+print(fibonacci(10))  
+
+
 

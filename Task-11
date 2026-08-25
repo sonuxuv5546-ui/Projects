@@ -181,7 +181,8 @@ def test_invalid_login(driver):
                       "//*[contains(text(),'Invalid') or contains(text(),'invalid')]"
                   )) > 0
     )
+assert "/sign-in/" in driver.current_url
 --------------------------------------------------------------------------------------------------
 C:\Users\Dell\PycharmProjects\PythonProject3
 
-assert "/sign-in/" in driver.current_url
+

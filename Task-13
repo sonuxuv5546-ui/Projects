@@ -1,0 +1,162 @@
+import pytest
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+URL = "https://jqueryui.com/droppable/"
+
+
+@pytest.fixture
+def driver():
+    driver = webdriver.Chrome()
+    driver.maximize_window()
+
+    yield driver
+
+    driver.quit()
+
+
+# POSITIVE TEST CASES
+
+
+def test_drag_and_drop_success(driver):
+
+    driver.get(URL)
+
+    # Switch to iframe containing the draggable/droppable elements
+    iframe = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "iframe.demo-frame")
+        )
+    )
+
+    driver.switch_to.frame(iframe)
+
+    # Locate source and target
+    source = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.ID, "draggable")
+        )
+    )
+
+    target = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.ID, "droppable")
+        )
+    )
+
+    # Perform drag and drop
+    actions = ActionChains(driver)
+
+    actions.drag_and_drop(
+        source,
+        target
+    ).perform()
+
+    # Verify successful drop
+    WebDriverWait(driver, 10).until(
+        EC.text_to_be_present_in_element(
+            (By.ID, "droppable"),
+            "Dropped!"
+        )
+    )
+
+    assert target.text == "Dropped!"
+
+
+def test_drag_and_drop_using_offset(driver):
+
+    driver.get(URL)
+
+    iframe = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "iframe.demo-frame")
+        )
+    )
+
+    driver.switch_to.frame(iframe)
+
+    source = driver.find_element(
+        By.ID,
+        "draggable"
+    )
+
+    target = driver.find_element(
+        By.ID,
+        "droppable"
+    )
+
+    # Drag source to target 
+    actions = ActionChains(driver)
+
+    actions.move_to_element(source)
+    actions.click_and_hold()
+    actions.move_to_element(target, duration=1)
+    actions.release()
+    actions.perform()
+
+    WebDriverWait(driver, 10).until(
+        EC.text_to_be_present_in_element(
+            (By.ID, "droppable"),
+            "Dropped!"
+        )
+    )
+
+    assert "Dropped!" in target.text
+
+
+# NEGATIVE TEST CASE
+
+def test_no_drop_without_drag(driver):
+
+    driver.get(URL)
+
+    iframe = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "iframe.demo-frame")
+        )
+    )
+
+    driver.switch_to.frame(iframe)
+
+    target = driver.find_element(
+        By.ID,
+        "droppable"
+    )
+
+    # Without dragging anything, the target should
+    # not show the successful drop message.
+    assert target.text == "Drop here"
+
+
+def test_wrong_element_does_not_drop(driver):
+
+    driver.get(URL)
+
+    iframe = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "iframe.demo-frame")
+        )
+    )
+
+    driver.switch_to.frame(iframe)
+
+    target = driver.find_element(
+        By.ID,
+        "droppable"
+    )
+
+    # Try dragging the target itself.
+    actions = ActionChains(driver)
+
+    actions.drag_and_drop(
+        target,
+        target
+    ).perform()
+
+    assert target.text != "Dropped!"
+-----------------------------------------------------------------------------
+pytest -v test_drag_drop.py --html=Drag_Drop_Test_Report.html --self-contained-html

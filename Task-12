@@ -1,0 +1,133 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+driver = webdriver.Chrome()
+driver.maximize_window()
+
+driver.get("https://www.guvi.in/")
+
+wait = WebDriverWait(driver, 10)
+
+# RELATIVE XPATH
+
+
+# Find the parent element of "Courses"
+courses = wait.until(
+    EC.presence_of_element_located(
+        (By.XPATH, "//a[normalize-space()='Courses']")
+    )
+)
+
+parent = courses.find_element(By.XPATH, "..")
+
+print("Parent element:")
+print(parent.tag_name)
+
+
+#first child element of the parent
+first_child = parent.find_element(By.XPATH, "./*")
+
+print("First child:")
+print(first_child.tag_name)
+
+
+# second sibling
+second_sibling = courses.find_element(
+    By.XPATH,
+    "./following-sibling::*[2]"
+)
+print("Second sibling:")
+print(second_sibling.text)
+
+
+# Select the parent of an element having href attribute
+href_element = wait.until(
+    EC.presence_of_element_located(
+        (By.XPATH, "//a[@href][1]")
+    )
+)
+
+parent_of_href = href_element.find_element(
+    By.XPATH,
+    ".."
+)
+
+print("Parent of href element:")
+print(parent_of_href.tag_name)
+
+
+# XPATH AXES
+
+# Find ancestor elements
+ancestors = courses.find_elements(
+    By.XPATH,
+    "./ancestor::*"
+)
+
+print("\nAncestor elements:")
+
+for element in ancestors:
+    print(element.tag_name)
+
+
+# Locate all following siblings
+following_siblings = courses.find_elements(
+    By.XPATH,
+    "./following-sibling::*"
+)
+
+print("\nFollowing siblings:")
+
+for element in following_siblings:
+    print(element.text)
+
+
+# Select all preceding elements
+preceding_elements = courses.find_elements(
+    By.XPATH,
+    "./preceding::*"
+)
+
+print("\nNumber of preceding elements:",
+      len(preceding_elements))
+
+
+# DYNAMIC XPATH EXAMPLE
+# Using contains()
+courses_contains = driver.find_element(
+    By.XPATH,
+    "//a[contains(normalize-space(),'Courses')]"
+)
+
+print("\nCourses found using contains():",
+      courses_contains.text)
+
+
+# Using starts-with()
+practice = driver.find_element(
+    By.XPATH,
+    "//a[starts-with(normalize-space(),'Practice')]"
+)
+
+print("Practice found:",
+      practice.text)
+
+
+# Using normalize-space()
+resources = driver.find_element(
+    By.XPATH,
+    "//a[normalize-space()='Resources']"
+)
+
+print("Resources found:",
+      resources.text)
+
+
+# CLOSE BROWSER
+driver.quit()
+---------------------------------------------------------------------------------------
+C:\Users\Dell\PycharmProjects\PythonProject3

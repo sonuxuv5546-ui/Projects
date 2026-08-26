@@ -1,0 +1,66 @@
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+    WebDriverException
+)
+
+
+class PopulationPage:
+
+    URL = (
+        "https://www.theworldcounts.com/challenges/"
+        "planet-earth/state-of-the-planet/"
+        "world-population-clock-live"
+    )
+
+    # XPath ONLY
+    POPULATION_COUNT = (
+        By.XPATH,
+        "//*[contains(text(),'People') or "
+        "contains(text(),'people') or "
+        "contains(text(),'Population')]"
+    )
+
+    def __init__(self, driver):
+
+        self.driver = driver
+
+        # Explicit Wait
+        self.wait = WebDriverWait(driver, 20)
+
+    def open_page(self):
+
+        try:
+            self.driver.get(self.URL)
+
+        except WebDriverException as error:
+
+            raise AssertionError(
+                f"Unable to open website: {error}"
+            )
+
+    def get_population_count(self):
+
+        try:
+
+            element = self.wait.until(
+                EC.visibility_of_element_located(
+                    self.POPULATION_COUNT
+                )
+            )
+
+            return element.text
+
+        except (
+            TimeoutException,
+            NoSuchElementException
+        ) as error:
+
+            raise AssertionError(
+                f"Population count was not found: {error}"
+            )
+
+        

@@ -1,0 +1,142 @@
+import pytest
+
+from pages.login_page import LoginPage
+from pages.home_page import HomePage
+from utilities.config import Config
+
+
+class TestGUVI:
+
+    #Successful Login
+    # Positive Test Case
+
+
+    def test_successful_login(self, driver):
+
+        login_page = LoginPage(driver)
+        home_page = HomePage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        login_page.login(
+            Config.USERNAME,
+            Config.PASSWORD
+        )
+
+        assert home_page.is_home_page_displayed(), \
+            "Successful login failed"
+
+    # Unsuccessful Login
+    # Negative Test Case
+
+
+    def test_unsuccessful_login(self, driver):
+
+        login_page = LoginPage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        login_page.login(
+            "invalid_username",
+            "invalid_password"
+        )
+
+        assert login_page.is_username_displayed(), \
+            "User should remain on login page"
+
+    # TC003 - Validate Username Input Box
+
+    def test_validate_username_input_box(
+        self,
+        driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        assert login_page.is_username_displayed(), \
+            "Username input box is not displayed"
+
+
+    # TC004 - Validate Password Input Box
+
+
+    def test_validate_password_input_box(
+        self,
+        driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        assert login_page.is_password_displayed(), \
+            "Password input box is not displayed"
+
+
+    # TC005 - Validate Submit/Login Button
+
+
+    def test_validate_submit_button(
+        self,
+        driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        assert login_page.is_login_button_displayed(), \
+            "Login button is not displayed"
+
+        assert login_page.is_login_button_enabled(), \
+            "Login button is not enabled"
+
+
+    # TC006 - Validate Logout
+
+
+    def test_validate_logout(self, driver):
+
+        login_page = LoginPage(driver)
+        home_page = HomePage(driver)
+
+        login_page.open_website(
+            Config.URL
+        )
+
+        login_page.click_login_link()
+
+        login_page.login(
+            Config.USERNAME,
+            Config.PASSWORD
+        )
+
+        assert home_page.is_home_page_displayed(), \
+            "Login failed"
+
+        home_page.click_logout()
+
+        assert home_page.is_logged_out(), \
+            "Logout functionality failed"

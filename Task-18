@@ -1,0 +1,103 @@
+from behave import given, when, then
+from features.pages.login_page import LoginPage
+from features.pages.dashboard_page import DashboardPage
+
+
+VALID_USERNAME = "sonuxuv5546@gmail.com"
+VALID_PASSWORD = "Sonu5546@"
+
+INVALID_USERNAME = "invalid_username"
+INVALID_PASSWORD = "invalid_password"
+
+
+@given("I open the GUVI login page")
+def open_login_page(context):
+
+    context.login_page = LoginPage(
+        context.driver
+    )
+
+    context.login_page.open()
+
+
+@when("I login using valid username and password")
+def valid_login(context):
+
+    context.login_page.login(
+        VALID_USERNAME,
+        VALID_PASSWORD
+    )
+
+
+@when("I login using invalid username and password")
+def invalid_login(context):
+
+    context.login_page.login(
+        INVALID_USERNAME,
+        INVALID_PASSWORD
+    )
+
+
+@then("I should be successfully logged in")
+def verify_successful_login(context):
+
+    context.dashboard_page = DashboardPage(
+        context.driver
+    )
+
+    assert context.dashboard_page.is_dashboard_displayed(), \
+        "User was not successfully logged in"
+
+
+@then("I should remain on the login page")
+def verify_unsuccessful_login(context):
+
+    assert context.login_page.is_username_displayed(), \
+        "Login page is not displayed"
+
+
+@then("the username input box should be displayed")
+def verify_username(context):
+
+    assert context.login_page.is_username_displayed(), \
+        "Username input box is not displayed"
+
+
+@then("the password input box should be displayed")
+def verify_password(context):
+
+    assert context.login_page.is_password_displayed(), \
+        "Password input box is not displayed"
+
+
+@then("the login button should be displayed")
+def verify_login_button(context):
+
+    assert context.login_page.is_login_button_displayed(), \
+        "Login button is not displayed"
+
+
+@then("the login button should be enabled")
+def verify_login_button_enabled(context):
+
+    assert context.login_page.is_login_button_enabled(), \
+        "Login button is not enabled"
+
+
+@when("I logout from the GUVI portal")
+def logout(context):
+
+    context.dashboard_page = DashboardPage(
+        context.driver
+    )
+
+    context.dashboard_page.logout()
+
+
+@then("I should be redirected to the login page")
+def verify_logout(context):
+
+    assert context.dashboard_page.is_login_page_displayed(), \
+        "Logout functionality failed"
+----------------------------------------------------------
+C:\Users\Dell\PycharmProjects\PythonProject3

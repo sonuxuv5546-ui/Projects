@@ -1,347 +1,329 @@
-#base_page.py
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as EC
-#
-#
-# class BasePage:
-#
-#     def __init__(self, driver):
-#         self.driver = driver
-#         self.wait = WebDriverWait(driver, 10)
-#
-#     def click(self, locator):
-#         self.wait.until(
-#             EC.element_to_be_clickable(locator)
-#         ).click()
-#
-#     def is_displayed(self, locator):
-#         return self.wait.until(
-#             EC.visibility_of_element_located(locator)
-#         ).is_displayed()
-#
-#     def get_text(self, locator):
-#         return self.wait.until(
-#             EC.visibility_of_element_located(locator)
-#         ).text
-#
-#     def get_current_url(self):
-#         return self.driver.current_url
-#
-#
-#  #guvi_page.py
-# from selenium.webdriver.common.by import By
-# from base_page import BasePage
-#
-#
-# class GUVIPage(BasePage):
-#     # Locators
-#     LOGIN_BUTTON = (
-#         By.XPATH,
-#         "//a[contains(translate(., 'LOGIN', 'login'), 'login')]"
-#     )
-#
-#     SIGNUP_BUTTON = (
-#         By.XPATH,
-#         "//a[contains(translate(., 'SIGNUP', 'signup'), 'signup')]"
-#     )
-#
-#     COURSES = (
-#         By.XPATH,
-#         "//*[normalize-space()='Courses']"
-#     )
-#
-#     LIVE_CLASSES = (
-#         By.XPATH,
-#         "//*[contains(normalize-space(), 'LIVE Classes')]"
-#     )
-#
-#     PRACTICE = (
-#         By.XPATH,
-#         "//*[normalize-space()='Practice']"
-#     )
-#
-#     DOBBY = (
-#         By.XPATH,
-#         "//*[contains(translate(., 'DOBBY', 'dobby'), 'dobby')]"
-#     )
-#
-#     def open_homepage(self):
-#         self.driver.get("https://www.guvi.in/")
-#
-#     def verify_login_button(self):
-#         return self.is_displayed(self.LOGIN_BUTTON)
-#
-#     def click_login(self):
-#         self.click(self.LOGIN_BUTTON)
-#
-#     def verify_signup_button(self):
-#         return self.is_displayed(self.SIGNUP_BUTTON)
-#
-#     def click_signup(self):
-#         self.click(self.SIGNUP_BUTTON)
-#
-#     def verify_courses(self):
-#         return self.is_displayed(self.COURSES)
-#
-#     def verify_live_classes(self):
-#         return self.is_displayed(self.LIVE_CLASSES)
-#
-#     def verify_practice(self):
-#         return self.is_displayed(self.PRACTICE)
-#
-#     def verify_dobby(self):
-#         return self.is_displayed(self.DOBBY)
-#
-#
-# #login_page.py
-#
-# from selenium.webdriver.common.by import By
-# from base_page import BasePage
-#
-#
-# class LoginPage(BasePage):
-#
-#     EMAIL = (
-#         By.XPATH,
-#         "//input[@type='email' or contains(@placeholder,'mail')]"
-#     )
-#
-#     PASSWORD = (
-#         By.XPATH,
-#         "//input[@type='password']"
-#     )
-#
-#     LOGIN_BUTTON = (
-#         By.XPATH,
-#         "//button[contains(translate(., 'LOGIN', 'login'), 'login')]"
-#     )
-#
-#     ERROR_MESSAGE = (
-#         By.XPATH,
-#         "//*[contains(@class,'error') or "
-#         "contains(translate(., 'INVALID', 'invalid'), 'invalid')]"
-#     )
-#
-#     LOGOUT = (
-#         By.XPATH,
-#         "//*[contains(translate(., 'LOGOUT', 'logout'), 'logout')]"
-#     )
-#
-#     def enter_email(self, email):
-#         self.wait.until(
-#             lambda driver: driver.find_element(*self.EMAIL)
-#         ).send_keys(email)
-#
-#     def enter_password(self, password):
-#         self.wait.until(
-#             lambda driver: driver.find_element(*self.PASSWORD)
-#         ).send_keys(password)
-#
-#     def click_login(self):
-#         self.click(self.LOGIN_BUTTON)
-#
-#     def login(self, email, password):
-#         self.enter_email(email)
-#         self.enter_password(password)
-#         self.click_login()
-#
-#     def verify_error_message(self):
-#         return self.is_displayed(self.ERROR_MESSAGE)
-#
-#     def click_logout(self):
-#         self.click(self.LOGOUT)
-#
-#
-# #test_guvi.py
-#
-# import unittest
-#
-# from selenium import webdriver
-# from selenium.webdriver.chrome.options import Options
-#
-# from guvi_page import GUVIPage
-# from login_page import LoginPage
-#
-#
-# class TestGUVI(unittest.TestCase):
-#
-#     @classmethod
-#     def setUpClass(cls):
-#         options = Options()
-#         options.add_argument("--start-maximized")
-#
-#         cls.driver = webdriver.Chrome(options=options)
-#
-#         cls.guvi = GUVIPage(cls.driver)
-#         cls.login_page = LoginPage(cls.driver)
-#
-#     # Test Case 1
-#     def test_01_verify_url(self):
-#         self.guvi.open_homepage()
-#
-#         expected_url = "https://www.guvi.in/"
-#         actual_url = self.driver.current_url
-#
-#         self.assertEqual(
-#             actual_url,
-#             expected_url,
-#             "URL is not matching"
-#         )
-#
-#         print("TC01 PASS - URL is valid")
-#
-#     # Test Case 2
-#     def test_02_verify_title(self):
-#         self.guvi.open_homepage()
-#
-#         expected_title = "GUVI | Learn to code in your native language"
-#         actual_title = self.driver.title
-#
-#         self.assertEqual(
-#             actual_title,
-#             expected_title,
-#             "Page title is not matching"
-#         )
-#
-#         print("TC02 PASS - Title is correct")
-#
-#     # Test Case 3
-#     def test_03_login_button(self):
-#         self.guvi.open_homepage()
-#
-#         self.assertTrue(
-#             self.guvi.verify_login_button()
-#         )
-#
-#         self.guvi.click_login()
-#
-#         self.assertIn(
-#             "login",
-#             self.driver.current_url.lower()
-#         )
-#
-#         print("TC03 PASS - Login button is visible and clickable")
-#
-#     # Test Case 4
-#     def test_04_signup_button(self):
-#         self.guvi.open_homepage()
-#
-#         self.assertTrue(
-#             self.guvi.verify_signup_button()
-#         )
-#
-#         self.guvi.click_signup()
-#
-#         self.assertIn(
-#             "register",
-#             self.driver.current_url.lower()
-#         )
-#
-#         print("TC04 PASS - Sign-Up button is visible and clickable")
-#
-#     # Test Case 5
-#     def test_05_signup_navigation(self):
-#         self.guvi.open_homepage()
-#
-#         self.guvi.click_signup()
-#
-#         expected_url = "https://www.guvi.in/register/"
-#         actual_url = self.driver.current_url
-#
-#         self.assertEqual(
-#             actual_url,
-#             expected_url,
-#             "Sign-Up navigation URL is incorrect"
-#         )
-#
-#         print("TC05 PASS - Sign-Up navigation is correct")
-#
-#     # Test Case 6
-#     def test_06_valid_login(self):
-#         self.guvi.open_homepage()
-#         self.guvi.click_login()
-#
-#         email = "sonuxuv5546@gmail.com"
-#         password = "Sonu5546@"
-#
-#         self.login_page.login(email, password)
-#
-#         # Validate successful login
-#         self.assertNotIn(
-#             "login",
-#             self.driver.current_url.lower()
-#         )
-#
-#         print("TC06 PASS - Valid login successful")
-#
-#     # Test Case 7
-#     def test_07_invalid_login(self):
-#         self.guvi.open_homepage()
-#         self.guvi.click_login()
-#
-#         email = "invalid@example.com"
-#         password = "wrongpassword"
-#
-#         self.login_page.login(email, password)
-#
-#         self.assertTrue(
-#             self.login_page.verify_error_message()
-#         )
-#
-#         print("TC07 PASS - Invalid login handled correctly")
-#
-#     # Test Case 8
-#     def test_08_verify_menu_items(self):
-#         self.guvi.open_homepage()
-#
-#         self.assertTrue(
-#             self.guvi.verify_courses()
-#         )
-#
-#         self.assertTrue(
-#             self.guvi.verify_live_classes()
-#         )
-#
-#         self.assertTrue(
-#             self.guvi.verify_practice()
-#         )
-#
-#         print("TC08 PASS - Menu items are displayed")
-#
-#     # Test Case 9
-#     def test_09_verify_dobby(self):
-#         self.guvi.open_homepage()
-#
-#         self.assertTrue(
-#             self.guvi.verify_dobby()
-#         )
-#
-#         print("TC09 PASS - Dobby Assistant is displayed")
-#
-#     # Test Case 10
-#     def test_10_logout(self):
-#         self.guvi.open_homepage()
-#         self.guvi.click_login()
-#
-#         email = "sonuxuv5546@gmail.com"
-#         password = "Sonu5546@"
-#
-#         self.login_page.login(email, password)
-#
-#         self.login_page.click_logout()
-#
-#         self.assertTrue(
-#             "login" in self.driver.current_url.lower()
-#             or self.driver.current_url == "https://www.guvi.in/"
-#         )
-#
-#         print("TC10 PASS - Logout successful")
-#
-#     @classmethod
-#     def tearDownClass(cls):
-#         cls.driver.quit()
-#
-#
-# if __name__ == "__main__":
-#     unittest.main()
+
+class BasePage:
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+    def click(self, locator):
+        element = self.wait.until(
+            EC.element_to_be_clickable(locator)
+        )
+        element.click()
+
+    def get_text(self, locator):
+        element = self.wait.until(
+            EC.visibility_of_element_located(locator)
+        )
+        return element.text
+
+    def is_visible(self, locator):
+        try:
+            self.wait.until(
+                EC.visibility_of_element_located(locator)
+            )
+            return True
+
+        except Exception:
+            return False
+
+    def enter_text(self, locator, text):
+
+        element = self.wait.until(
+            EC.visibility_of_element_located(locator)
+        )
+
+        element.clear()
+
+        element.send_keys(text)
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+class HomePage(BasePage):
+
+    LOGIN_BUTTON = (
+        By.XPATH,
+        "//a[contains(text(),'Login') or contains(@href,'login')]"
+    )
+
+    SIGNUP_BUTTON = (
+        By.XPATH,
+        "//a[contains(text(),'Sign Up') or contains(text(),'SignUp')]"
+    )
+
+    COURSES_MENU = (
+        By.XPATH,
+        "//*[contains(text(),'Courses')]"
+    )
+
+    LIVE_CLASSES_MENU = (
+        By.XPATH,
+        "//*[contains(text(),'LIVE Classes')]"
+    )
+
+    PRACTICE_MENU = (
+        By.XPATH,
+        "//*[contains(text(),'Practice')]"
+    )
+
+    DOBBY_ASSISTANT = (
+        By.XPATH,
+        "//*[contains(@class,'dobby') or contains(text(),'Dobby')]"
+    )
+
+    def open(self, url):
+        self.driver.get(url)
+
+    def click_login(self):
+        self.click(self.LOGIN_BUTTON)
+
+    def click_signup(self):
+        self.click(self.SIGNUP_BUTTON)
+
+    def is_login_visible(self):
+        return self.is_visible(self.LOGIN_BUTTON)
+
+    def is_signup_visible(self):
+        return self.is_visible(self.SIGNUP_BUTTON)
+
+    def is_courses_visible(self):
+        return self.is_visible(self.COURSES_MENU)
+
+    def is_live_classes_visible(self):
+        return self.is_visible(self.LIVE_CLASSES_MENU)
+
+    def is_practice_visible(self):
+        return self.is_visible(self.PRACTICE_MENU)
+
+    def is_dobby_visible(self):
+        return self.is_visible(self.DOBBY_ASSISTANT)
+
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+class LoginPage(BasePage):
+
+    EMAIL_INPUT = (
+        By.XPATH,
+        "//input[@type='email']"
+    )
+
+    PASSWORD_INPUT = (
+        By.XPATH,
+        "//input[@type='password']"
+    )
+
+    LOGIN_BUTTON = (
+        By.XPATH,
+        "//button[contains(text(),'Login') or contains(text(),'Sign In')]"
+    )
+
+    ERROR_MESSAGE = (
+        By.XPATH,
+        "//*[contains(@class,'error') or contains(text(),'Invalid')]"
+    )
+
+    PROFILE_ICON = (
+        By.XPATH,
+        "//*[contains(@class,'profile')]"
+    )
+
+    LOGOUT_BUTTON = (
+        By.XPATH,
+        "//*[contains(text(),'Logout') or contains(text(),'Sign Out')]"
+    )
+
+    def login(self, email, password):
+
+        self.enter_text(
+            self.EMAIL_INPUT,
+            email
+        )
+
+        self.enter_text(
+            self.PASSWORD_INPUT,
+            password
+        )
+
+        self.click(self.LOGIN_BUTTON)
+
+    def get_error_message(self):
+        return self.get_text(self.ERROR_MESSAGE)
+
+    def logout(self):
+        self.click(self.PROFILE_ICON)
+        self.click(self.LOGOUT_BUTTON)
+
+
+import pytest
+from pages.home_page import HomePage
+from utilities.config import BASE_URL
+
+
+class TestGuviHomePage:
+
+    def test_verify_url(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        assert "guvi.in" in driver.current_url
+
+
+    def test_verify_title(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        expected_title = (
+            "GUVI | Learn to code in your native language"
+        )
+
+        assert driver.title == expected_title
+
+
+    def test_login_button_visibility_and_clickability(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        assert home_page.is_login_visible()
+
+        home_page.click_login()
+
+        assert "login" in driver.current_url.lower()
+
+
+    def test_signup_button_visibility_and_clickability(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        assert home_page.is_signup_visible()
+
+        home_page.click_signup()
+
+        assert "register" in driver.current_url.lower()
+
+
+    def test_signup_redirect_url(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        home_page.click_signup()
+
+        expected_url = "https://www.guvi.in/register/"
+
+        assert driver.current_url == expected_url
+
+
+    def test_menu_items_visibility(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        assert home_page.is_courses_visible()
+
+        assert home_page.is_live_classes_visible()
+
+        assert home_page.is_practice_visible()
+
+
+    def test_dobby_assistant_visibility(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        assert home_page.is_dobby_visible()
+
+
+from pages.home_page import HomePage
+from pages.login_page import LoginPage
+from utilities.config import (
+    BASE_URL,
+    VALID_EMAIL,
+    VALID_PASSWORD,
+    INVALID_EMAIL,
+    INVALID_PASSWORD
+)
+
+
+class TestGuviLogin:
+
+    def test_valid_login(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        home_page.click_login()
+
+        login_page = LoginPage(driver)
+
+        login_page.login(
+            VALID_EMAIL,
+            VALID_PASSWORD
+        )
+
+        assert "dashboard" in driver.current_url.lower() \
+            or "profile" in driver.current_url.lower()
+
+
+    def test_invalid_login(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        home_page.click_login()
+
+        login_page = LoginPage(driver)
+
+        login_page.login(
+            INVALID_EMAIL,
+            INVALID_PASSWORD
+        )
+
+        error_message = (
+            login_page.get_error_message()
+        )
+
+        assert error_message != ""
+
+
+    def test_logout(self, driver):
+
+        home_page = HomePage(driver)
+
+        home_page.open(BASE_URL)
+
+        home_page.click_login()
+
+        login_page = LoginPage(driver)
+
+        login_page.login(
+            VALID_EMAIL,
+            VALID_PASSWORD
+        )
+
+        login_page.logout()
+
+        assert (
+            "login" in driver.current_url.lower()
+            or driver.current_url == BASE_URL
+        )

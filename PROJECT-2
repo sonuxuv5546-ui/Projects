@@ -1,0 +1,818 @@
+#Test Case 1 – Data Driven Login
+
+import pytest
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from utilities.config import BASE_URL
+from utilities.data_reader import get_login_data
+
+
+class TestLogin:
+
+
+    @pytest.mark.parametrize(
+        "username,password,expected_result",
+        get_login_data()
+    )
+    def test_login_with_multiple_credentials(
+        self,
+        driver,
+        username,
+        password,
+        expected_result
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            username,
+            password
+        )
+
+        if expected_result == "success":
+
+            dashboard_page = DashboardPage(driver)
+
+            assert dashboard_page.is_dashboard_visible()
+
+            dashboard_page.logout()
+
+        else:
+
+            assert login_page.is_error_visible()
+
+
+
+
+#Test Case 2 – Verify Home URL
+
+from pages.login_page import LoginPage
+from utilities.config import BASE_URL
+
+class TestHome:
+
+
+    def test_home_url_accessible(
+        self,
+        driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        assert "orangehrmlive.com" in driver.current_url
+
+        assert login_page.is_username_visible()
+
+
+
+#Test Case 3 – Login Field Validation
+
+def test_login_fields_visible_and_enabled(
+        self,
+        driver
+):
+
+    login_page = LoginPage(driver)
+
+    login_page.open(BASE_URL)
+
+    assert login_page.is_username_visible()
+
+    assert login_page.is_password_visible()
+
+
+
+from pages.login_page import LoginPage
+from utilities.config import BASE_URL
+
+
+class TestHome:
+
+
+    def test_home_url_accessible(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        assert "orangehrmlive.com" in driver.current_url
+
+
+    def test_login_fields_visible(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        assert login_page.is_username_visible()
+
+        assert login_page.is_password_visible()
+
+
+
+
+
+#Test Case 4 – Verify Main Menu Items
+
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestMenu:
+
+
+    def test_main_menu_items(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        dashboard_page = DashboardPage(driver)
+
+        menu_items = [
+
+            dashboard_page.ADMIN_MENU,
+
+            dashboard_page.PIM_MENU,
+
+            dashboard_page.LEAVE_MENU,
+
+            dashboard_page.TIME_MENU,
+
+            dashboard_page.RECRUITMENT_MENU,
+
+            dashboard_page.MY_INFO_MENU,
+
+            dashboard_page.PERFORMANCE_MENU,
+
+            dashboard_page.DASHBOARD_MENU
+
+        ]
+
+        for menu in menu_items:
+
+            assert dashboard_page.is_visible(menu)
+
+
+#Test Cases 5 and 6.
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class AdminPage(BasePage):
+
+    ADD_BUTTON = (
+        By.XPATH,
+        "//button[normalize-space()='Add']"
+    )
+
+    USER_ROLE = (
+        By.XPATH,
+        "(//div[contains(@class,'oxd-select-text')])[1]"
+    )
+
+    EMPLOYEE_NAME = (
+        By.XPATH,
+        "//input[@placeholder='Type for hints...']"
+    )
+
+    STATUS = (
+        By.XPATH,
+        "(//div[contains(@class,'oxd-select-text')])[2]"
+    )
+
+    USERNAME = (
+        By.XPATH,
+        "(//input[contains(@class,'oxd-input')])[2]"
+    )
+
+    PASSWORD = (
+        By.XPATH,
+        "//input[@type='password'][1]"
+    )
+
+    CONFIRM_PASSWORD = (
+        By.XPATH,
+        "//input[@type='password'][2]"
+    )
+
+    SAVE_BUTTON = (
+        By.XPATH,
+        "//button[@type='submit']"
+    )
+
+    SEARCH_USERNAME = (
+        By.XPATH,
+        "//label[text()='Username']/../following::input[1]"
+    )
+
+    SEARCH_BUTTON = (
+        By.XPATH,
+        "//button[@type='submit']"
+    )
+
+
+    def click_add_user(self):
+
+        self.click(
+            self.ADD_BUTTON
+        )
+
+
+    def create_user(
+            self,
+            username,
+            password
+    ):
+
+        self.enter_text(
+            self.USERNAME,
+            username
+        )
+
+        self.enter_text(
+            self.PASSWORD,
+            password
+        )
+
+        self.enter_text(
+            self.CONFIRM_PASSWORD,
+            password
+        )
+
+        self.click(
+            self.SAVE_BUTTON
+        )
+
+
+    def search_user(
+            self,
+            username
+    ):
+
+        self.enter_text(
+            self.SEARCH_USERNAME,
+            username
+        )
+
+        self.click(
+            self.SEARCH_BUTTON
+        )
+
+
+
+
+
+#Test Case 5 – Create New User and Login
+
+
+import time
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from pages.admin_page import AdminPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestAdmin:
+
+
+    def test_create_new_user_and_login(
+            self,
+            driver
+    ):
+
+        new_username = (
+            "testuser12345"
+        )
+
+        new_password = (
+            "Test@12345"
+        )
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        dashboard_page = DashboardPage(driver)
+
+        dashboard_page.click_menu(
+            dashboard_page.ADMIN_MENU
+        )
+
+        admin_page = AdminPage(driver)
+
+        admin_page.click_add_user()
+
+        admin_page.create_user(
+            new_username,
+            new_password
+        )
+
+        time.sleep(3)
+
+        dashboard_page.logout()
+
+        login_page.login(
+            new_username,
+            new_password
+        )
+
+        assert "dashboard" in driver.current_url.lower()
+
+
+
+
+#Test Case 6 – Search Newly Created User
+
+
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from pages.admin_page import AdminPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestUserManagement:
+
+
+    def test_search_created_user(
+            self,
+            driver
+    ):
+
+        username = "testuser12345"
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        dashboard_page = DashboardPage(driver)
+
+        dashboard_page.click_menu(
+            dashboard_page.ADMIN_MENU
+        )
+
+        admin_page = AdminPage(driver)
+
+        admin_page.search_user(
+            username
+        )
+
+        assert username in driver.page_source
+
+
+
+
+#Test Case 7 – Forgot Password
+
+
+RESET_USERNAME = (
+    By.NAME,
+    "username"
+)
+
+RESET_BUTTON = (
+    By.XPATH,
+    "//button[@type='submit']"
+)
+
+RESET_SUCCESS = (
+    By.XPATH,
+    "//*[contains(text(),'Reset Password link sent successfully')]"
+)
+
+Add these methods:
+
+def enter_reset_username(
+        self,
+        username
+):
+
+    self.enter_text(
+        self.RESET_USERNAME,
+        username
+    )
+
+
+def submit_reset_request(self):
+
+    self.click(
+        self.RESET_BUTTON
+    )
+
+
+def is_reset_success_visible(self):
+
+    return self.is_visible(
+        self.RESET_SUCCESS
+    )
+
+Create tests/test_forgot_password.py:
+
+from pages.login_page import LoginPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME
+)
+
+
+class TestForgotPassword:
+
+
+    def test_forgot_password(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.click_forgot_password()
+
+        login_page.enter_reset_username(
+            ADMIN_USERNAME
+        )
+
+        login_page.submit_reset_request()
+
+        assert (
+            login_page.is_reset_success_visible()
+        )
+
+
+
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class MyInfoPage(BasePage):
+
+    PERSONAL_DETAILS = (
+        By.XPATH,
+        "//a[contains(.,'Personal Details')]"
+    )
+
+    CONTACT_DETAILS = (
+        By.XPATH,
+        "//a[contains(.,'Contact Details')]"
+    )
+
+    EMERGENCY_CONTACTS = (
+        By.XPATH,
+        "//a[contains(.,'Emergency Contacts')]"
+    )
+
+
+    def is_personal_details_visible(self):
+
+        return self.is_visible(
+            self.PERSONAL_DETAILS
+        )
+
+
+    def is_contact_details_visible(self):
+
+        return self.is_visible(
+            self.CONTACT_DETAILS
+        )
+
+
+    def is_emergency_contacts_visible(self):
+
+        return self.is_visible(
+            self.EMERGENCY_CONTACTS
+        )
+
+
+
+
+#Test Case 8
+
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from pages.my_info_page import MyInfoPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestMyInfo:
+
+
+    def test_my_info_menu_items(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        dashboard_page = DashboardPage(driver)
+
+        dashboard_page.click_menu(
+            dashboard_page.MY_INFO_MENU
+        )
+
+        my_info_page = MyInfoPage(driver)
+
+        assert (
+            my_info_page
+            .is_personal_details_visible()
+        )
+
+        assert (
+            my_info_page
+            .is_contact_details_visible()
+        )
+
+        assert (
+            my_info_page
+            .is_emergency_contacts_visible()
+        )
+
+
+
+
+from selenium.webdriver.common.by import By
+
+from pages.base_page import BasePage
+
+
+class LeavePage(BasePage):
+
+    ASSIGN_LEAVE = (
+        By.XPATH,
+        "//a[contains(.,'Assign Leave')]"
+    )
+
+    EMPLOYEE_NAME = (
+        By.XPATH,
+        "//input[@placeholder='Type for hints...']"
+    )
+
+    LEAVE_TYPE = (
+        By.XPATH,
+        "//label[text()='Leave Type']/following::div[contains(@class,'oxd-select-text')][1]"
+    )
+
+    FROM_DATE = (
+        By.XPATH,
+        "//label[text()='From Date']/following::input[1]"
+    )
+
+    TO_DATE = (
+        By.XPATH,
+        "//label[text()='To Date']/following::input[1]"
+    )
+
+    ASSIGN_BUTTON = (
+        By.XPATH,
+        "//button[@type='submit']"
+    )
+
+
+    def click_assign_leave(self):
+
+        self.click(
+            self.ASSIGN_LEAVE
+        )
+
+
+    def assign_leave(
+            self,
+            employee,
+            from_date,
+            to_date
+    ):
+
+        self.enter_text(
+            self.EMPLOYEE_NAME,
+            employee
+        )
+
+        self.enter_text(
+            self.FROM_DATE,
+            from_date
+        )
+
+        self.enter_text(
+            self.TO_DATE,
+            to_date
+        )
+
+        self.click(
+            self.ASSIGN_BUTTON
+        )
+
+
+
+
+
+#Test Case 9
+
+
+from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from pages.leave_page import LeavePage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestLeave:
+
+
+    def test_assign_leave(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        dashboard_page = DashboardPage(driver)
+
+        dashboard_page.click_menu(
+            dashboard_page.LEAVE_MENU
+        )
+
+        leave_page = LeavePage(driver)
+
+        leave_page.click_assign_leave()
+
+        leave_page.assign_leave(
+            "Paul Collings",
+            "2026-09-01",
+            "2026-09-02"
+        )
+
+        assert "leave" in driver.current_url.lower()
+
+
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class ClaimPage(BasePage):
+
+    CLAIM_MENU = (
+        By.XPATH,
+        "//span[text()='Claim']"
+    )
+
+    ASSIGN_CLAIM = (
+        By.XPATH,
+        "//button[contains(.,'Create Claim')]"
+    )
+
+    CLAIM_AMOUNT = (
+        By.XPATH,
+        "//input[@name='amount']"
+    )
+
+    REASON = (
+        By.XPATH,
+        "//textarea"
+    )
+
+    SUBMIT_BUTTON = (
+        By.XPATH,
+        "//button[@type='submit']"
+    )
+
+
+    def create_claim(
+            self,
+            amount,
+            reason
+    ):
+
+        self.click(
+            self.ASSIGN_CLAIM
+        )
+
+        self.enter_text(
+            self.CLAIM_AMOUNT,
+            amount
+        )
+
+        self.enter_text(
+            self.REASON,
+            reason
+        )
+
+        self.click(
+            self.SUBMIT_BUTTON
+        )
+
+
+
+#Test Case 10
+
+from pages.login_page import LoginPage
+from pages.claim_page import ClaimPage
+
+from utilities.config import (
+    BASE_URL,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
+
+
+class TestClaim:
+
+
+    def test_create_claim(
+            self,
+            driver
+    ):
+
+        login_page = LoginPage(driver)
+
+        login_page.open(BASE_URL)
+
+        login_page.login(
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD
+        )
+
+        claim_page = ClaimPage(driver)
+
+        claim_page.click(
+            claim_page.CLAIM_MENU
+        )
+
+        claim_page.create_claim(
+            "500",
+            "Travel expenses"
+        )
+
+        assert "claim" in driver.current_url.lower()

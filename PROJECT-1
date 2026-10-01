@@ -1,5 +1,81 @@
+import os
+import logging
+import pytest
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.edge.service import Service as EdgeService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+logger = logging.getLogger("GUVI_Automation")
+logger.setLevel(logging.INFO)
+
+
+def pytest_addoption(parser):
+    parser.addoption("--browser", action="store", default="chrome", help="Browser options: chrome, firefox, edge")
+
+
+@pytest.fixture(scope="class")
+def setup(request):
+    """Initializes the chosen WebDriver, configures windows."""
+    browser_name = request.config.getoption("--browser").lower()
+    driver = None
+
+    logger.info(f"Initializing WebDriver execution profile for browser: {browser_name.upper()}")
+
+    try:
+        if browser_name == "chrome":
+            options = webdriver.ChromeOptions()
+            options.add_argument("--start-maximized")
+            driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+        elif browser_name == "firefox":
+            options = webdriver.FirefoxOptions()
+            driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
+            driver.maximize_window()
+        elif browser_name == "edge":
+            options = webdriver.EdgeOptions()
+            options.add_argument("--start-maximized")
+            driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
+        else:
+            raise ValueError(f"Browser type '{browser_name}' is not supported by this framework configuration.")
+    except Exception as e:
+        logger.critical(f"Failed to instantiate WebDriver object instance: {e}")
+        raise e
+
+    request.cls.driver = driver
+    request.cls.logger = logger
+
+    yield driver
+
+    if driver:
+        logger.info("Closing down operational WebDriver instance session context gracefully.")
+        driver.quit()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Listens into execution context to capture automated failure screenshots."""
+    outcome = yield
+    rep = outcome.get_result()
+
+    if rep.when == "call" and rep.failed:
+        driver = getattr(item.cls, "driver", None)
+        if driver:
+            screenshot_dir = "screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            file_name = f"{screenshot_dir}/{item.name}_{timestamp}.png"
+            driver.save_screenshot(file_name)
+            logger.error(f"Test Step Failed! Diagnostic snapshot persisted at tracking path: {file_name}")
+
+
+import logging
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 
 class BasePage:
@@ -7,323 +83,181 @@ class BasePage:
     def __init__(self, driver):
         self.driver = driver
         self.wait = WebDriverWait(driver, 10)
+        self.logger = logging.getLogger("GUVI_Automation.Page")
 
-    def click(self, locator):
-        element = self.wait.until(
-            EC.element_to_be_clickable(locator)
-        )
-        element.click()
-
-    def get_text(self, locator):
-        element = self.wait.until(
-            EC.visibility_of_element_located(locator)
-        )
-        return element.text
-
-    def is_visible(self, locator):
-        try:
-            self.wait.until(
-                EC.visibility_of_element_located(locator)
-            )
-            return True
-
-        except Exception:
-            return False
-
-    def enter_text(self, locator, text):
-
-        element = self.wait.until(
-            EC.visibility_of_element_located(locator)
-        )
-
-        element.clear()
-
-        element.send_keys(text)
-
-
-from selenium.webdriver.common.by import By
-from pages.base_page import BasePage
-
-class HomePage(BasePage):
-
-    LOGIN_BUTTON = (
-        By.XPATH,
-        "//a[contains(text(),'Login') or contains(@href,'login')]"
-    )
-
-    SIGNUP_BUTTON = (
-        By.XPATH,
-        "//a[contains(text(),'Sign Up') or contains(text(),'SignUp')]"
-    )
-
-    COURSES_MENU = (
-        By.XPATH,
-        "//*[contains(text(),'Courses')]"
-    )
-
-    LIVE_CLASSES_MENU = (
-        By.XPATH,
-        "//*[contains(text(),'LIVE Classes')]"
-    )
-
-    PRACTICE_MENU = (
-        By.XPATH,
-        "//*[contains(text(),'Practice')]"
-    )
-
-    DOBBY_ASSISTANT = (
-        By.XPATH,
-        "//*[contains(@class,'dobby') or contains(text(),'Dobby')]"
-    )
-
-    def open(self, url):
+    def open_url(self, url):
+        self.logger.info(f"Navigating target session endpoint path to: {url}")
         self.driver.get(url)
 
-    def click_login(self):
-        self.click(self.LOGIN_BUTTON)
+    def get_title(self):
+        return self.driver.title
 
-    def click_signup(self):
-        self.click(self.SIGNUP_BUTTON)
+    def get_current_url(self):
+        return self.driver.current_url
 
-    def is_login_visible(self):
-        return self.is_visible(self.LOGIN_BUTTON)
+    def find_element(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator))
+        except TimeoutException:
+            self.logger.error(f"Timeout occurred locating UI target selector criteria matching: {locator}")
+            raise NoSuchElementException(f"Target element definition missing via: {locator}")
 
-    def is_signup_visible(self):
-        return self.is_visible(self.SIGNUP_BUTTON)
+    def click_element(self, locator):
+        try:
+            element = self.wait.until(EC.element_to_be_clickable(locator))
+            element.click()
+        except TimeoutException:
+            self.logger.error(f"Action intercept error: Element '{locator}' was not clickable within time bounds.")
+            raise
 
-    def is_courses_visible(self):
-        return self.is_visible(self.COURSES_MENU)
+    def enter_text(self, locator, text):
+        element = self.find_element(locator)
+        element.clear()
+        element.send_keys(text)
 
-    def is_live_classes_visible(self):
-        return self.is_visible(self.LIVE_CLASSES_MENU)
-
-    def is_practice_visible(self):
-        return self.is_visible(self.PRACTICE_MENU)
-
-    def is_dobby_visible(self):
-        return self.is_visible(self.DOBBY_ASSISTANT)
-
+    def is_element_displayed(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator)).is_displayed()
+        except TimeoutException:
+            return False
 
 
 from selenium.webdriver.common.by import By
 from pages.base_page import BasePage
+
+
+class HomePage(BasePage):
+    """Container tracking interaction handlers mapping the top-level main landing interface."""
+
+    # Locators
+    LOGIN_BUTTON = (By.XPATH, "//a[contains(text(),'Login') or @href='/login']")
+    SIGN_UP_BUTTON = (By.XPATH, "//a[contains(text(),'Sign up') or @href='/register']")
+    MENU_COURSES = (By.XPATH, "//a[contains(text(),'Courses')]")
+    MENU_LIVE_CLASSES = (By.XPATH, "//a[contains(text(),'LIVE Classes')]")
+    MENU_PRACTICE = (By.XPATH, "//span[contains(text(),'Practice')]")
+    DOBBY_ASSISTANT = (By.ID, "dobby-chat-bot")
+
+    def __init__(self, driver):
+        super().__init__(driver)
+        self.url = "https://www.guvi.in"
+
+    def navigate_home(self):
+        self.open_url(self.url)
+
+    def click_login(self):
+        self.click_element(self.LOGIN_BUTTON)
+
+    def click_sign_up(self):
+        self.click_element(self.SIGN_UP_BUTTON)
+
+    def verify_navigation_menus(self):
+        return (self.is_element_displayed(self.MENU_COURSES) and
+                self.is_element_displayed(self.MENU_LIVE_CLASSES) and
+                self.is_element_displayed(self.MENU_PRACTICE))
+
+    def is_dobby_assistant_visible(self):
+        return self.is_element_displayed(self.DOBBY_ASSISTANT)
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
 
 class LoginPage(BasePage):
 
-    EMAIL_INPUT = (
-        By.XPATH,
-        "//input[@type='email']"
-    )
+    EMAIL_INPUT = (By.ID, "login_email")
+    PASSWORD_INPUT = (By.ID, "login_password")
+    SUBMIT_LOGIN = (By.ID, "login_button")
+    ERROR_BANNER = (By.CLASS_NAME, "alert-danger")
+    LOGOUT_BUTTON = (By.XPATH, "//button[contains(text(),'Logout')]")
 
-    PASSWORD_INPUT = (
-        By.XPATH,
-        "//input[@type='password']"
-    )
+    def login_user(self, email, password):
+        self.enter_text(self.EMAIL_INPUT, email)
+        self.enter_text(self.PASSWORD_INPUT, password)
+        self.click_element(self.SUBMIT_LOGIN)
 
-    LOGIN_BUTTON = (
-        By.XPATH,
-        "//button[contains(text(),'Login') or contains(text(),'Sign In')]"
-    )
+    def is_error_displayed(self):
+        return self.is_element_displayed(self.ERROR_BANNER)
 
-    ERROR_MESSAGE = (
-        By.XPATH,
-        "//*[contains(@class,'error') or contains(text(),'Invalid')]"
-    )
-
-    PROFILE_ICON = (
-        By.XPATH,
-        "//*[contains(@class,'profile')]"
-    )
-
-    LOGOUT_BUTTON = (
-        By.XPATH,
-        "//*[contains(text(),'Logout') or contains(text(),'Sign Out')]"
-    )
-
-    def login(self, email, password):
-
-        self.enter_text(
-            self.EMAIL_INPUT,
-            email
-        )
-
-        self.enter_text(
-            self.PASSWORD_INPUT,
-            password
-        )
-
-        self.click(self.LOGIN_BUTTON)
-
-    def get_error_message(self):
-        return self.get_text(self.ERROR_MESSAGE)
-
-    def logout(self):
-        self.click(self.PROFILE_ICON)
-        self.click(self.LOGOUT_BUTTON)
+    def trigger_logout(self):
+        self.click_element(self.LOGOUT_BUTTON)
 
 
 import pytest
 from pages.home_page import HomePage
-from utilities.config import BASE_URL
-
-
-class TestGuviHomePage:
-
-    def test_verify_url(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        assert "guvi.in" in driver.current_url
-
-
-    def test_verify_title(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        expected_title = (
-            "GUVI | Learn to code in your native language"
-        )
-
-        assert driver.title == expected_title
-
-
-    def test_login_button_visibility_and_clickability(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        assert home_page.is_login_visible()
-
-        home_page.click_login()
-
-        assert "login" in driver.current_url.lower()
-
-
-    def test_signup_button_visibility_and_clickability(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        assert home_page.is_signup_visible()
-
-        home_page.click_signup()
-
-        assert "register" in driver.current_url.lower()
-
-
-    def test_signup_redirect_url(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        home_page.click_signup()
-
-        expected_url = "https://www.guvi.in/register/"
-
-        assert driver.current_url == expected_url
-
-
-    def test_menu_items_visibility(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        assert home_page.is_courses_visible()
-
-        assert home_page.is_live_classes_visible()
-
-        assert home_page.is_practice_visible()
-
-
-    def test_dobby_assistant_visibility(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        assert home_page.is_dobby_visible()
-
-
-from pages.home_page import HomePage
 from pages.login_page import LoginPage
-from utilities.config import (
-    BASE_URL,
-    VALID_EMAIL,
-    VALID_PASSWORD,
-    INVALID_EMAIL,
-    INVALID_PASSWORD
-)
+
+@pytest.mark.usefixtures("setup")
+class TestGuviSuite:
+
+    @pytest.fixture(autouse=True)
+    def initialize_pages(self):
+        self.home_page = HomePage(self.driver)
+        self.login_page = LoginPage(self.driver)
+
+    def test_case_01_url_validation(self):
+        self.logger.info("Executing Test Case 1: Validating URL routing lifecycle.")
+        self.home_page.navigate_home()
+        assert "guvi.in" in self.home_page.get_current_url(), "Failed to direct correctly to domain root location."
+
+    def test_case_02_title_validation(self):
+        self.logger.info("Executing Test Case 2: Matching active application title structure.")
+        self.home_page.navigate_home()
+        expected = "GUVI | Learn to code in your native language"
+        assert expected in self.home_page.get_title(), f"Title mismatched metadata profile: {self.home_page.get_title()}"
+
+    def test_case_03_login_clickability(self):
+        self.logger.info("Executing Test Case 3: Evaluating interactive state visibility of Login entry hooks.")
+        self.home_page.navigate_home()
+        assert self.home_page.is_element_displayed(self.home_page.LOGIN_BUTTON), "Login hook point targets missing from viewport layout."
+        self.home_page.click_login()
+        assert "login" in self.home_page.get_current_url().lower(), "Did not redirect to the secure authentication endpoint."
+
+    def test_case_04_signup_clickability(self):
+        self.logger.info("Executing Test Case 4: Evaluating interactive state visibility of Registration entry hooks.")
+        self.home_page.navigate_home()
+        assert self.home_page.is_element_displayed(self.home_page.SIGN_UP_BUTTON), "Sign-up target endpoint element omitted from header nodes."
+        self.home_page.click_sign_up()
+        assert "register" in self.home_page.get_current_url().lower(), "Target validation address redirection fault."
+
+    def test_case_05_signup_navigation_validation(self):
+        self.logger.info("Executing Test Case 5: Asserting strict target tracking layout matches via Sign-up redirection.")
+        self.home_page.navigate_home()
+        self.home_page.click_sign_up()
+        assert self.home_page.get_current_url() == "https://www.guvi.in/register/", "Redirection routing mismatched literal static path configurations."
+
+    def test_case_06_login_valid_credentials(self):
+        self.logger.info("Executing Test Case 6: Confirming identity state mapping with a standard system test profile.")
+        self.home_page.navigate_home()
+        self.home_page.click_login()
+        self.login_page.login_user("automated_suite_account@example.com", "AccessKeyAuthPass123!")
+        assert "dashboard" in self.home_page.get_current_url().lower(), "Redirection into the authorized profile environment timed out or dropped."
+
+    def test_case_07_login_invalid_credentials(self):
+        self.logger.info("Executing Test Case 7: Confirming failure path error responses to incorrect credentials.")
+        self.home_page.navigate_home()
+        self.home_page.click_login()
+        self.login_page.login_user("spurious_target@malicious.xyz", "IncorrectCredentialsMock")
+        assert self.login_page.is_error_displayed(), "Expected notification error banners missed tracking display layer targets."
+
+    def test_case_08_homepage_menus_visibility(self):
+        self.logger.info("Executing Test Case 8: Confirming structure nodes mapping for navigational headers.")
+        self.home_page.navigate_home()
+        assert self.home_page.verify_navigation_menus(), "Navigational components ('Courses', 'LIVE Classes', 'Practice') missing from page structure."
+
+    def test_case_09_dobby_assistant_presence(self):
+        self.logger.info("Executing Test Case 9: Identifying digital help desk virtual agent layer context structures.")
+        self.home_page.navigate_home()
+        assert self.home_page.is_dobby_assistant_visible(), "Dobby Assistant help-desk integration wrapper missing from document body."
+
+    def test_case_10_logout_functionality(self):
+        self.logger.info("Executing Test Case 10: Terminating dynamic identity session instances.")
+        self.home_page.navigate_home()
+        self.home_page.click_login()
+        self.login_page.login_user("automated_suite_account@example.com", "AccessKeyAuthPass123!")
+        self.login_page.trigger_logout()
+        assert "login" in self.home_page.get_current_url().lower() or self.home_page.get_current_url() == "https://www.guvi.in/", "System context remained tracking an authorized user profile state."
 
 
-class TestGuviLogin:
-
-    def test_valid_login(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        home_page.click_login()
-
-        login_page = LoginPage(driver)
-
-        login_page.login(
-            VALID_EMAIL,
-            VALID_PASSWORD
-        )
-
-        assert "dashboard" in driver.current_url.lower() \
-            or "profile" in driver.current_url.lower()
 
 
-    def test_invalid_login(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        home_page.click_login()
-
-        login_page = LoginPage(driver)
-
-        login_page.login(
-            INVALID_EMAIL,
-            INVALID_PASSWORD
-        )
-
-        error_message = (
-            login_page.get_error_message()
-        )
-
-        assert error_message != ""
-
-
-    def test_logout(self, driver):
-
-        home_page = HomePage(driver)
-
-        home_page.open(BASE_URL)
-
-        home_page.click_login()
-
-        login_page = LoginPage(driver)
-
-        login_page.login(
-            VALID_EMAIL,
-            VALID_PASSWORD
-        )
-
-        login_page.logout()
-
-        assert (
-            "login" in driver.current_url.lower()
-            or driver.current_url == BASE_URL
-        )

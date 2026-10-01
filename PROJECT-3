@@ -1,1 +1,395 @@
+import os
+import logging
+import pytest
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.edge.service import Service as EdgeService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+logger = logging.getLogger("SauceLabs")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--browser", action="store", default="chrome", help="chrome, firefox, or edge")
+
+
+@pytest.fixture(scope="class")
+def setup(request):
+    browser_name = request.config.getoption("--browser").lower()
+    driver = None
+
+    logger.info(f"Configuring execution framework runtime for browser: {browser_name.upper()}")
+
+    if browser_name == "chrome":
+        options = webdriver.ChromeOptions()
+        options.add_argument("--start-maximized")
+        driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+    elif browser_name == "firefox":
+        options = webdriver.FirefoxOptions()
+        driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
+        driver.maximize_window()
+    elif browser_name == "edge":
+        options = webdriver.EdgeOptions()
+        options.add_argument("--start-maximized")
+        driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
+    else:
+        raise ValueError(f"Browser runtime definition parameter '{browser_name}' not supported.")
+
+    request.cls.driver = driver
+    request.cls.logger = logger
+
+    yield driver
+
+    if driver:
+        logger.info("Tearing down running test browser sessions gracefully.")
+        driver.quit()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    if rep.when == "call" and rep.failed:
+        driver = getattr(item.cls, "driver", None)
+        if driver:
+            os.makedirs("screenshots", exist_ok=True)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            file_name = f"screenshots/{item.name}_{timestamp}.png"
+            driver.save_screenshot(file_name)
+            logger.error(f"Test failure captured. Diagnostic screenshot outputted at: {file_name}")
+
+
+import logging
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+
+
+class BasePage:
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+        self.logger = logging.getLogger("SauceLabs.Page")
+
+    def open_url(self, url):
+        self.logger.info(f"Opening target site navigation link: {url}")
+        self.driver.get(url)
+
+    def get_current_url(self):
+        return self.driver.current_url
+
+    def find_element(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator))
+        except TimeoutException:
+            self.logger.error(f"Timeout trying to sync visibility layout elements matching: {locator}")
+            raise NoSuchElementException(f"Target object definition dropped using: {locator}")
+
+    def find_elements(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_all_elements_located(locator))
+        except TimeoutException:
+            return []
+
+    def click_element(self, locator):
+        try:
+            element = self.wait.until(EC.element_to_be_clickable(locator))
+            element.click()
+        except TimeoutException:
+            self.logger.error(f"Action interaction failure targeting locator: {locator}")
+            raise
+
+    def enter_text(self, locator, text):
+        element = self.find_element(locator)
+        element.clear()
+        element.send_keys(text)
+
+    def is_element_displayed(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator)).is_displayed()
+        except TimeoutException:
+            return False
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class LoginPage(BasePage):
+
+    USERNAME_FIELD = (By.ID, "user-name")
+    PASSWORD_FIELD = (By.ID, "password")
+    LOGIN_BUTTON = (By.ID, "login-button")
+    ERROR_CONTAINER = (By.XPATH, "//h3[@data-test='error']")
+
+    def login(self, username, password):
+        self.enter_text(self.USERNAME_FIELD, username)
+        self.enter_text(self.PASSWORD_FIELD, password)
+        self.click_element(self.LOGIN_BUTTON)
+
+    def get_error_message(self):
+        if self.is_element_displayed(self.ERROR_CONTAINER):
+            return self.find_element(self.ERROR_CONTAINER).text
+        return ""
+
+
+import random
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
+from pages.base_page import BasePage
+
+
+class InventoryPage(BasePage):
+
+    CART_ICON = (By.CLASS_NAME, "shopping_cart_link")
+    CART_BADGE = (By.CLASS_NAME, "shopping_cart_badge")
+    INVENTORY_ITEM = (By.CLASS_NAME, "inventory_item")
+    ITEM_NAME = (By.CLASS_NAME, "inventory_item_name")
+    ITEM_PRICE = (By.CLASS_NAME, "inventory_item_price")
+    ADD_TO_CART_BTN = (By.XPATH, ".//button[contains(@class, 'btn_inventory')]")
+    SORT_DROPDOWN = (By.CLASS_NAME, "product_sort_container")
+
+    BURGER_MENU = (By.ID, "react-burger-menu-btn")
+    LOGOUT_LINK = (By.ID, "logout_sidebar_link")
+    RESET_STATE_LINK = (By.ID, "reset_sidebar_link")
+
+    def is_cart_icon_visible(self):
+        return self.is_element_displayed(self.CART_ICON)
+
+    def get_cart_badge_count(self):
+        if self.is_element_displayed(self.CART_BADGE):
+            return int(self.find_element(self.CART_BADGE).text)
+        return 0
+
+    def select_random_products(self, quantity=4):
+        items = self.find_elements(self.INVENTORY_ITEM)
+        selected_indices = random.sample(range(len(items)), quantity)
+
+        extracted_data = []
+        for index in selected_indices:
+            item = items[index]
+            name = item.find_element(*self.ITEM_NAME).text
+            price = item.find_element(*self.ITEM_PRICE).text
+
+            extracted_data.append({"name": name, "price": price, "element": item})
+            self.logger.info(f"Randomly picked product item: {name} | Value: {price}")
+
+        return extracted_data
+
+    def add_products_to_cart(self, index_data_list):
+        for data in index_data_list:
+            data["element"].find_element(*self.ADD_TO_CART_BTN).click()
+
+    def go_to_cart(self):
+        self.click_element(self.CART_ICON)
+
+    def sort_products_by(self, visible_text):
+        dropdown = Select(self.find_element(self.SORT_DROPDOWN))
+        dropdown.select_by_visible_text(visible_text)
+
+    def get_all_product_names(self):
+        names = self.find_elements(self.ITEM_NAME)
+        return [el.text for el in names]
+
+    def get_all_product_prices(self):
+        prices = self.find_elements(self.ITEM_PRICE)
+        return [float(el.text.replace("$", "")) for el in prices]
+
+    def open_sidebar_menu(self):
+        self.click_element(self.BURGER_MENU)
+
+    def trigger_logout(self):
+        self.open_sidebar_menu()
+        self.click_element(self.LOGOUT_LINK)
+
+    def trigger_reset_app_state(self):
+        self.open_sidebar_menu()
+        self.click_element(self.RESET_STATE_LINK)
+
+
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class CartPage(BasePage):
+
+    CART_ITEM = (By.CLASS_NAME, "cart_item")
+    ITEM_NAME = (By.CLASS_NAME, "inventory_item_name")
+    ITEM_PRICE = (By.CLASS_NAME, "inventory_item_price")
+    CHECKOUT_BUTTON = (By.ID, "checkout")
+
+    def get_cart_items_details(self):
+        items = self.find_elements(self.CART_ITEM)
+        details = []
+        for item in items:
+            name = item.find_element(*self.ITEM_NAME).text
+            price = item.find_element(*self.ITEM_PRICE).text
+            details.append({"name": name, "price": price})
+        return details
+
+    def proceed_to_checkout(self):
+        self.click_element(self.CHECKOUT_BUTTON)
+
+
+import os
+from datetime import datetime
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+
+class CheckoutPage(BasePage):
+
+    # Customer Details Input
+    FIRST_NAME = (By.ID, "first-name")
+    LAST_NAME = (By.ID, "last-name")
+    POSTAL_CODE = (By.ID, "postal-code")
+    CONTINUE_BTN = (By.ID, "continue")
+
+    # Order Overview
+    SUMMARY_TOTAL = (By.CLASS_NAME, "summary_total_label")
+    FINISH_BTN = (By.ID, "finish")
+    COMPLETE_HEADER = (By.CLASS_NAME, "complete-header")
+
+    def fill_shipping_details(self, fname, lname, zipcode):
+        self.enter_text(self.FIRST_NAME, fname)
+        self.enter_text(self.LAST_NAME, lname)
+        self.enter_text(self.POSTAL_CODE, zipcode)
+        self.click_element(self.CONTINUE_BTN)
+
+    def capture_order_summary_screenshot(self, test_name):
+        os.makedirs("screenshots", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filepath = f"screenshots/{test_name}_summary_{timestamp}.png"
+        self.driver.save_screenshot(filepath)
+        self.logger.info(f"Order summary statement screenshot stored at: {filepath}")
+
+    def finalize_order(self):
+        self.click_element(self.FINISH_BTN)
+
+    def get_confirmation_message(self):
+        return self.find_element(self.COMPLETE_HEADER).text
+
+
+import pytest
+from pages.login_page import LoginPage
+from pages.inventory_page import InventoryPage
+from pages.cart_page import CartPage
+from pages.checkout_page import CheckoutPage
+
+
+@pytest.mark.usefixtures("setup")
+class TestSauceLabsSuite:
+
+    @pytest.fixture(autouse=True)
+    def init_pages(self):
+        self.login_page = LoginPage(self.driver)
+        self.inventory_page = InventoryPage(self.driver)
+        self.cart_page = CartPage(self.driver)
+        self.checkout_page = CheckoutPage(self.driver)
+        self.base_url = "https://saucedemo.com"
+
+    @pytest.mark.parametrize("user, expectation", [
+        ("standard_user", "success"),
+        ("locked_out_user", "failed"),
+        ("problem_user", "success"),
+        ("performance_glitch_user", "success")
+    ])
+    def test_case_01_predefined_users_login(self, user, expectation):
+        self.logger.info(f"TC1: Testing authentication matrix profile targeting: {user}")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login(user, "secret_sauce")
+
+        if expectation == "success":
+            assert "inventory.html" in self.driver.current_url, f"User {user} could not navigate to catalog."
+            self.inventory_page.trigger_logout()
+        else:
+            assert "locked out" in self.login_page.get_error_message().lower(), f"User {user} bypassed block errors."
+
+    def test_case_02_invalid_login(self):
+        self.logger.info("TC2: Executing validation vectors using invalid credentials.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("malicious_hacker", "invalid_password_combo")
+        assert len(self.login_page.get_error_message()) > 0, "System failed to present defensive prompt alerts."
+
+    def test_case_03_logout_flow(self):
+        self.logger.info("TC3: Processing session termination lifecycle events.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("standard_user", "secret_sauce")
+        self.inventory_page.trigger_logout()
+        assert self.driver.current_url == self.base_url, "System structure dropped redirections back to root site context."
+
+    def test_case_04_cart_icon_visibility(self):
+        self.logger.info("TC4: Verifying interactive visibility anchors inside product catalog viewports.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("standard_user", "secret_sauce")
+        assert self.inventory_page.is_cart_icon_visible(), "Shopping cart visual indicator missing from main header node map."
+        self.inventory_page.trigger_logout()
+
+    def test_case_05_to_08_e2e_purchase_workflow(self):
+        self.logger.info("TC5-8: Executing unified dynamic randomized purchase path transactions.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("standard_user", "secret_sauce")
+
+        # TC5: Randomly pick 4 items and fetch their data attributes
+        selected_items = self.inventory_page.select_random_products(quantity=4)
+        assert len(selected_items) == 4, "Random extraction failed to capture 4 structural item nodes."
+
+        # TC6: Add targeted items to the cart and confirm badge updates
+        self.inventory_page.add_products_to_cart(selected_items)
+        assert self.inventory_page.get_cart_badge_count() == 4, "The cart tracking counter indicator mismatched added counts."
+
+        # TC7: Validate item data alignments inside item baskets views
+        self.inventory_page.go_to_cart()
+        cart_items = self.cart_page.get_cart_items_details()
+
+        for index, item in enumerate(selected_items):
+            assert any(c['name'] == item['name'] for c in cart_items), f"Item data validation missing: {item['name']}"
+
+        # TC8: Complete transaction path execution and save receipts screenshots
+        self.cart_page.proceed_to_checkout()
+        self.checkout_page.fill_shipping_details("QA_Tester", "AutomationEngine", "563115")
+
+        self.checkout_page.capture_order_summary_screenshot("E2E_Purchase_Run")
+        self.checkout_page.finalize_order()
+
+        conf_msg = self.checkout_page.get_confirmation_message().lower()
+        assert "thank you" in conf_msg, "Order confirmation layout did not present the appropriate success headers."
+
+        self.inventory_page.trigger_logout()
+
+    def test_case_09_sorting_catalog(self):
+        self.logger.info("TC9: Running dynamic classification assertions inside catalog filters grids.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("standard_user", "secret_sauce")
+
+        self.inventory_page.sort_products_by("Price (low to high)")
+        prices = self.inventory_page.get_all_product_prices()
+        assert prices == sorted(prices), "Catalog filter algorithm did not index items correctly ascending."
+
+        self.inventory_page.sort_products_by("Name (Z to A)")
+        names = self.inventory_page.get_all_product_names()
+        assert names == sorted(names,
+                               reverse=True), "Catalog filter algorithm did not sort names in reverse alphabetical order."
+
+        self.inventory_page.trigger_logout()
+
+    def test_case_10_reset_application_state(self):
+        self.logger.info("TC10: Validating data flushing tracking capabilities using Reset App States.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("standard_user", "secret_sauce")
+
+        items = self.inventory_page.select_random_products(quantity=2)
+        self.inventory_page.add_products_to_cart(items)
+        assert self.inventory_page.get_cart_badge_count() > 0, "Failed to provision application context state modifications."
+
+        self.inventory_page.trigger_reset_app_state()
+        assert self.inventory_page.get_cart_badge_count() == 0, "Reset app action failed to scrub transaction session items."
+
+        self.inventory_page.trigger_logout()
+
 

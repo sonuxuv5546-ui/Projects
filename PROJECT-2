@@ -1,492 +1,225 @@
-#Test Case 1 – Data Driven Login
-
+import os
+import logging
 import pytest
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from utilities.config import BASE_URL
-from utilities.data_reader import get_login_data
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.edge.service import Service as EdgeService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+logger = logging.getLogger("OrangeHRM")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--browser", action="store", default="chrome", help="chrome, firefox, or edge")
+
+
+@pytest.fixture(scope="class")
+def setup(request):
+    browser_name = request.config.getoption("--browser").lower()
+    driver = None
+
+    logger.info(f"Setting up operational environment configuration for: {browser_name.upper()}")
+
+    if browser_name == "chrome":
+        options = webdriver.ChromeOptions()
+        options.add_argument("--start-maximized")
+        driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+    elif browser_name == "firefox":
+        options = webdriver.FirefoxOptions()
+        driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
+        driver.maximize_window()
+    elif browser_name == "edge":
+        options = webdriver.EdgeOptions()
+        options.add_argument("--start-maximized")
+        driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
+    else:
+        raise ValueError(f"Browser profile configuration parameter: '{browser_name}' not supported.")
+
+    request.cls.driver = driver
+    request.cls.logger = logger
+
+    yield driver
+
+    if driver:
+        logger.info("Tearing down Active Web Browser instances safely.")
+        driver.quit()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    if rep.when == "call" and rep.failed:
+        driver = getattr(item.cls, "driver", None)
+        if driver:
+            os.makedirs("screenshots", exist_ok=True)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            file_name = f"screenshots/{item.name}_{timestamp}.png"
+            driver.save_screenshot(file_name)
+            logger.error(f"Execution Error Encountered. Diagnostic screenshot outputted at: {file_name}")
 
 
-class TestLogin:
+import logging
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
 
 
-    @pytest.mark.parametrize(
-        "username,password,expected_result",
-        get_login_data()
-    )
-    def test_login_with_multiple_credentials(
-        self,
-        driver,
-        username,
-        password,
-        expected_result
-    ):
+class BasePage:
 
-        login_page = LoginPage(driver)
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 15)
+        self.logger = logging.getLogger("OrangeHRM.Page")
 
-        login_page.open(BASE_URL)
+    def open_url(self, url):
+        self.logger.info(f"Opening routing path endpoint: {url}")
+        self.driver.get(url)
 
-        login_page.login(
-            username,
-            password
-        )
+    def get_current_url(self):
+        return self.driver.current_url
 
-        if expected_result == "success":
+    def find_element(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator))
+        except TimeoutException:
+            self.logger.error(f"Timeout waiting for visibility of element located by: {locator}")
+            raise NoSuchElementException(f"Element locator targeted by {locator} broke synchronization bounds.")
 
-            dashboard_page = DashboardPage(driver)
+    def click_element(self, locator):
+        try:
+            element = self.wait.until(EC.element_to_be_clickable(locator))
+            element.click()
+        except (TimeoutException, ElementClickInterceptedException) as e:
+            self.logger.error(f"Failed handling action payload request against: {locator} - Exception: {str(e)}")
+            raise
 
-            assert dashboard_page.is_dashboard_visible()
+    def enter_text(self, locator, text):
+        element = self.find_element(locator)
+        element.clear()
+        element.send_keys(text)
 
-            dashboard_page.logout()
+    def is_element_displayed(self, locator):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator)).is_displayed()
+        except TimeoutException:
+            return False
 
-        else:
 
-            assert login_page.is_error_visible()
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
 
 
+class LoginPage(BasePage):
 
+    USERNAME_FIELD = (By.NAME, "username")
+    PASSWORD_FIELD = (By.NAME, "password")
+    LOGIN_BUTTON = (By.XPATH, "//button[@type='submit']")
+    ERROR_MESSAGE = (By.XPATH, "//p[contains(@class, 'oxd-alert-content-text')]")
+    FORGOT_PASSWORD_LINK = (By.XPATH, "//p[contains(@class, 'login-forgot-header')]")
 
-#Test Case 2 – Verify Home URL
+    # Forgot password layout selectors
+    RESET_USERNAME_FIELD = (By.NAME, "username")
+    RESET_PASSWORD_BUTTON = (By.XPATH, "//button[@type='submit']")
+    RESET_CONFIRM_MSG = (By.XPATH, "//h6[contains(@class, 'forgot-password-title')]")
 
-from pages.login_page import LoginPage
-from utilities.config import BASE_URL
+    def login(self, username, password):
+        self.enter_text(self.USERNAME_FIELD, username)
+        self.enter_text(self.PASSWORD_FIELD, password)
+        self.click_element(self.LOGIN_BUTTON)
 
-class TestHome:
+    def verify_fields_visible(self):
+        return self.is_element_displayed(self.USERNAME_FIELD) and self.is_element_displayed(self.PASSWORD_FIELD)
 
+    def get_error_message(self):
+        return self.find_element(self.ERROR_MESSAGE).text
 
-    def test_home_url_accessible(
-        self,
-        driver
-    ):
+    def click_forgot_password(self):
+        self.click_element(self.FORGOT_PASSWORD_LINK)
 
-        login_page = LoginPage(driver)
+    def submit_password_reset(self, username):
+        self.enter_text(self.RESET_USERNAME_FIELD, username)
+        self.click_element(self.RESET_PASSWORD_BUTTON)
 
-        login_page.open(BASE_URL)
+    def is_reset_confirmation_displayed(self):
+        return self.is_element_displayed(self.RESET_CONFIRM_MSG)
 
-        assert "orangehrmlive.com" in driver.current_url
 
-        assert login_page.is_username_visible()
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
 
 
+class DashboardPage(BasePage):
 
-#Test Case 3 – Login Field Validation
+    USER_DROPDOWN = (By.CLASS_NAME, "oxd-userdropdown-tab")
+    LOGOUT_LINK = (By.XPATH, "//a[text()='Logout']")
 
-def test_login_fields_visible_and_enabled(
-        self,
-        driver
-):
+    def get_menu_locator(self, menu_name):
+        return (By.XPATH, f"//a[contains(@class, 'oxd-main-menu-item') and .//span[text()='{menu_name}']]")
 
-    login_page = LoginPage(driver)
+    def verify_menu_item(self, menu_name):
+        locator = self.get_menu_locator(menu_name)
+        return self.is_element_displayed(locator)
 
-    login_page.open(BASE_URL)
+    def click_menu_item(self, menu_name):
+        self.click_element(self.get_menu_locator(menu_name))
 
-    assert login_page.is_username_visible()
+    def logout(self):
+        self.click_element(self.USER_DROPDOWN)
+        self.click_element(self.LOGOUT_LINK)
 
-    assert login_page.is_password_visible()
 
-
-
-from pages.login_page import LoginPage
-from utilities.config import BASE_URL
-
-
-class TestHome:
-
-
-    def test_home_url_accessible(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        assert "orangehrmlive.com" in driver.current_url
-
-
-    def test_login_fields_visible(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        assert login_page.is_username_visible()
-
-        assert login_page.is_password_visible()
-
-
-
-
-
-#Test Case 4 – Verify Main Menu Items
-
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
-
-
-class TestMenu:
-
-
-    def test_main_menu_items(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        dashboard_page = DashboardPage(driver)
-
-        menu_items = [
-
-            dashboard_page.ADMIN_MENU,
-
-            dashboard_page.PIM_MENU,
-
-            dashboard_page.LEAVE_MENU,
-
-            dashboard_page.TIME_MENU,
-
-            dashboard_page.RECRUITMENT_MENU,
-
-            dashboard_page.MY_INFO_MENU,
-
-            dashboard_page.PERFORMANCE_MENU,
-
-            dashboard_page.DASHBOARD_MENU
-
-        ]
-
-        for menu in menu_items:
-
-            assert dashboard_page.is_visible(menu)
-
-
-#Test Cases 5 and 6.
-
+import time
 from selenium.webdriver.common.by import By
 from pages.base_page import BasePage
 
 
 class AdminPage(BasePage):
 
-    ADD_BUTTON = (
-        By.XPATH,
-        "//button[normalize-space()='Add']"
-    )
-
-    USER_ROLE = (
-        By.XPATH,
-        "(//div[contains(@class,'oxd-select-text')])[1]"
-    )
-
-    EMPLOYEE_NAME = (
-        By.XPATH,
-        "//input[@placeholder='Type for hints...']"
-    )
-
-    STATUS = (
-        By.XPATH,
-        "(//div[contains(@class,'oxd-select-text')])[2]"
-    )
-
-    USERNAME = (
-        By.XPATH,
-        "(//input[contains(@class,'oxd-input')])[2]"
-    )
-
-    PASSWORD = (
-        By.XPATH,
-        "//input[@type='password'][1]"
-    )
-
-    CONFIRM_PASSWORD = (
-        By.XPATH,
-        "//input[@type='password'][2]"
-    )
-
-    SAVE_BUTTON = (
-        By.XPATH,
-        "//button[@type='submit']"
-    )
-
-    SEARCH_USERNAME = (
-        By.XPATH,
-        "//label[text()='Username']/../following::input[1]"
-    )
-
-    SEARCH_BUTTON = (
-        By.XPATH,
-        "//button[@type='submit']"
-    )
-
-
-    def click_add_user(self):
-
-        self.click(
-            self.ADD_BUTTON
-        )
-
-
-    def create_user(
-            self,
-            username,
-            password
-    ):
-
-        self.enter_text(
-            self.USERNAME,
-            username
-        )
-
-        self.enter_text(
-            self.PASSWORD,
-            password
-        )
-
-        self.enter_text(
-            self.CONFIRM_PASSWORD,
-            password
-        )
-
-        self.click(
-            self.SAVE_BUTTON
-        )
-
-
-    def search_user(
-            self,
-            username
-    ):
-
-        self.enter_text(
-            self.SEARCH_USERNAME,
-            username
-        )
-
-        self.click(
-            self.SEARCH_BUTTON
-        )
-
-
-
-
-
-#Test Case 5 – Create New User and Login
-
-
-import time
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from pages.admin_page import AdminPage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
-
-
-class TestAdmin:
-
-
-    def test_create_new_user_and_login(
-            self,
-            driver
-    ):
-
-        new_username = (
-            "testuser12345"
-        )
-
-        new_password = (
-            "Test@12345"
-        )
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        dashboard_page = DashboardPage(driver)
-
-        dashboard_page.click_menu(
-            dashboard_page.ADMIN_MENU
-        )
-
-        admin_page = AdminPage(driver)
-
-        admin_page.click_add_user()
-
-        admin_page.create_user(
-            new_username,
-            new_password
-        )
-
-        time.sleep(3)
-
-        dashboard_page.logout()
-
-        login_page.login(
-            new_username,
-            new_password
-        )
-
-        assert "dashboard" in driver.current_url.lower()
-
-
-
-
-#Test Case 6 – Search Newly Created User
-
-
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from pages.admin_page import AdminPage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
-
-
-class TestUserManagement:
-
-
-    def test_search_created_user(
-            self,
-            driver
-    ):
-
-        username = "testuser12345"
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        dashboard_page = DashboardPage(driver)
-
-        dashboard_page.click_menu(
-            dashboard_page.ADMIN_MENU
-        )
-
-        admin_page = AdminPage(driver)
-
-        admin_page.search_user(
-            username
-        )
-
-        assert username in driver.page_source
-
-
-
-
-#Test Case 7 – Forgot Password
-
-
-RESET_USERNAME = (
-    By.NAME,
-    "username"
-)
-
-RESET_BUTTON = (
-    By.XPATH,
-    "//button[@type='submit']"
-)
-
-RESET_SUCCESS = (
-    By.XPATH,
-    "//*[contains(text(),'Reset Password link sent successfully')]"
-)
-
-Add these methods:
-
-def enter_reset_username(
-        self,
-        username
-):
-
-    self.enter_text(
-        self.RESET_USERNAME,
-        username
-    )
-
-
-def submit_reset_request(self):
-
-    self.click(
-        self.RESET_BUTTON
-    )
-
-
-def is_reset_success_visible(self):
-
-    return self.is_visible(
-        self.RESET_SUCCESS
-    )
-
-Create tests/test_forgot_password.py:
-
-from pages.login_page import LoginPage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME
-)
-
-
-class TestForgotPassword:
-
-
-    def test_forgot_password(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.click_forgot_password()
-
-        login_page.enter_reset_username(
-            ADMIN_USERNAME
-        )
-
-        login_page.submit_reset_request()
-
-        assert (
-            login_page.is_reset_success_visible()
-        )
-
-
-
+    ADD_BUTTON = (By.XPATH, "//button[contains(., 'Add')]")
+    USER_ROLE_DROPDOWN = (By.XPATH, "(//div[@class='oxd-select-text oxd-select-text--active'])[1]")
+    USER_ROLE_OPTION = (By.XPATH, "//div[@role='option']/span[text()='ESS']")
+    STATUS_DROPDOWN = (By.XPATH, "(//div[@class='oxd-select-text oxd-select-text--active'])[2]")
+    STATUS_OPTION = (By.XPATH, "//div[@role='option']/span[text()='Enabled']")
+
+    EMPLOYEE_NAME_INPUT = (By.XPATH, "//input[@placeholder='Type for hints...']")
+    EMPLOYEE_SUGGESTION = (By.XPATH, "//div[@role='option']/span")
+    USERNAME_INPUT = (By.XPATH, "(//input[@class='oxd-input oxd-input--active'])[2]")
+    PASSWORD_INPUT = (By.XPATH, "(//input[@type='password'])[1]")
+    CONFIRM_PASSWORD_INPUT = (By.XPATH, "(//input[@type='password'])[2]")
+    SAVE_BUTTON = (By.XPATH, "//button[@type='submit']")
+
+    SEARCH_USERNAME_FIELD = (By.XPATH, "(//input[@class='oxd-input oxd-input--active'])[2]")
+    SEARCH_SUBMIT_BUTTON = (By.XPATH, "//button[@type='submit']")
+    RECORD_FOUND_CELL = (By.XPATH, "//div[@class='oxd-table-card']/div[@role='row']")
+
+    def add_user(self, emp_hint, username, password):
+        self.click_element(self.ADD_BUTTON)
+        self.click_element(self.USER_ROLE_DROPDOWN)
+        self.click_element(self.USER_ROLE_OPTION)
+        self.click_element(self.STATUS_DROPDOWN)
+        self.click_element(self.STATUS_OPTION)
+
+        self.enter_text(self.EMPLOYEE_NAME_INPUT, emp_hint)
+        # Allow input to populate options via application background framework routines safely
+        time.sleep(2.5)
+        self.click_element(self.EMPLOYEE_SUGGESTION)
+
+        self.enter_text(self.USERNAME_INPUT, username)
+        self.enter_text(self.PASSWORD_INPUT, password)
+        self.enter_text(self.CONFIRM_PASSWORD_INPUT, password)
+        time.sleep(1.0)
+        self.click_element(self.SAVE_BUTTON)
+        time.sleep(4.0)  # Allocation buffer interval for persistence layer execution operations
+
+    def search_for_user(self, username):
+        self.enter_text(self.SEARCH_USERNAME_FIELD, username)
+        self.click_element(self.SEARCH_SUBMIT_BUTTON)
+        return self.is_element_displayed(self.RECORD_FOUND_CELL)
 
 
 from selenium.webdriver.common.by import By
@@ -495,324 +228,208 @@ from pages.base_page import BasePage
 
 class MyInfoPage(BasePage):
 
-    PERSONAL_DETAILS = (
-        By.XPATH,
-        "//a[contains(.,'Personal Details')]"
-    )
+    def get_submenu_locator(self, name):
+        return (By.XPATH, f"//div[@class='orangehrm-tabs-wrapper']//a[text()='{name}']")
 
-    CONTACT_DETAILS = (
-        By.XPATH,
-        "//a[contains(.,'Contact Details')]"
-    )
-
-    EMERGENCY_CONTACTS = (
-        By.XPATH,
-        "//a[contains(.,'Emergency Contacts')]"
-    )
+    def verify_submenu_clickable(self, name):
+        locator = self.get_submenu_locator(name)
+        return self.is_element_displayed(locator)
 
 
-    def is_personal_details_visible(self):
-
-        return self.is_visible(
-            self.PERSONAL_DETAILS
-        )
-
-
-    def is_contact_details_visible(self):
-
-        return self.is_visible(
-            self.CONTACT_DETAILS
-        )
-
-
-    def is_emergency_contacts_visible(self):
-
-        return self.is_visible(
-            self.EMERGENCY_CONTACTS
-        )
-
-
-
-
-#Test Case 8
-
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from pages.my_info_page import MyInfoPage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
-
-
-class TestMyInfo:
-
-
-    def test_my_info_menu_items(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        dashboard_page = DashboardPage(driver)
-
-        dashboard_page.click_menu(
-            dashboard_page.MY_INFO_MENU
-        )
-
-        my_info_page = MyInfoPage(driver)
-
-        assert (
-            my_info_page
-            .is_personal_details_visible()
-        )
-
-        assert (
-            my_info_page
-            .is_contact_details_visible()
-        )
-
-        assert (
-            my_info_page
-            .is_emergency_contacts_visible()
-        )
-
-
-
-
+import time
 from selenium.webdriver.common.by import By
-
 from pages.base_page import BasePage
 
 
 class LeavePage(BasePage):
 
-    ASSIGN_LEAVE = (
-        By.XPATH,
-        "//a[contains(.,'Assign Leave')]"
-    )
+    ASSIGN_LEAVE_TAB = (By.XPATH, "//a[text()='Assign Leave']")
+    EMPLOYEE_NAME_FIELD = (By.XPATH, "//input[@placeholder='Type for hints...']")
+    EMPLOYEE_SELECT_OPTION = (By.XPATH, "//div[@role='option']/span")
+    LEAVE_TYPE_DROPDOWN = (By.CLASS_NAME, "oxd-select-text")
+    LEAVE_TYPE_OPTION = (By.XPATH, "//div[@role='option'][2]")
+    FROM_DATE = (By.XPATH, "(//input[@placeholder='yyyy-dd-mm'])[1]")
+    TO_DATE = (By.XPATH, "(//input[@placeholder='yyyy-dd-mm'])[2]")
+    ASSIGN_BUTTON = (By.XPATH, "//button[@type='submit']")
+    SUCCESS_POPUP = (By.XPATH, "//div[contains(@class, 'oxd-toast--success')]")
 
-    EMPLOYEE_NAME = (
-        By.XPATH,
-        "//input[@placeholder='Type for hints...']"
-    )
+    def assign_employee_leave(self, name_hint):
+        self.click_element(self.ASSIGN_LEAVE_TAB)
+        self.enter_text(self.EMPLOYEE_NAME_FIELD, name_hint)
+        time.sleep(2.0)
+        self.click_element(self.EMPLOYEE_SELECT_OPTION)
 
-    LEAVE_TYPE = (
-        By.XPATH,
-        "//label[text()='Leave Type']/following::div[contains(@class,'oxd-select-text')][1]"
-    )
+        self.click_element(self.LEAVE_TYPE_DROPDOWN)
+        self.click_element(self.LEAVE_TYPE_OPTION)
 
-    FROM_DATE = (
-        By.XPATH,
-        "//label[text()='From Date']/following::input[1]"
-    )
-
-    TO_DATE = (
-        By.XPATH,
-        "//label[text()='To Date']/following::input[1]"
-    )
-
-    ASSIGN_BUTTON = (
-        By.XPATH,
-        "//button[@type='submit']"
-    )
+        self.click_element(self.ASSIGN_BUTTON)
+        return self.is_element_displayed(self.SUCCESS_POPUP)
 
 
-    def click_assign_leave(self):
-
-        self.click(
-            self.ASSIGN_LEAVE
-        )
-
-
-    def assign_leave(
-            self,
-            employee,
-            from_date,
-            to_date
-    ):
-
-        self.enter_text(
-            self.EMPLOYEE_NAME,
-            employee
-        )
-
-        self.enter_text(
-            self.FROM_DATE,
-            from_date
-        )
-
-        self.enter_text(
-            self.TO_DATE,
-            to_date
-        )
-
-        self.click(
-            self.ASSIGN_BUTTON
-        )
-
-
-
-
-
-#Test Case 9
-
-
-from pages.login_page import LoginPage
-from pages.dashboard_page import DashboardPage
-from pages.leave_page import LeavePage
-
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
-
-
-class TestLeave:
-
-
-    def test_assign_leave(
-            self,
-            driver
-    ):
-
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        dashboard_page = DashboardPage(driver)
-
-        dashboard_page.click_menu(
-            dashboard_page.LEAVE_MENU
-        )
-
-        leave_page = LeavePage(driver)
-
-        leave_page.click_assign_leave()
-
-        leave_page.assign_leave(
-            "Paul Collings",
-            "2026-09-01",
-            "2026-09-02"
-        )
-
-        assert "leave" in driver.current_url.lower()
-
-
-
-
+import time
 from selenium.webdriver.common.by import By
 from pages.base_page import BasePage
 
 
 class ClaimPage(BasePage):
 
-    CLAIM_MENU = (
-        By.XPATH,
-        "//span[text()='Claim']"
-    )
+    SUBMIT_CLAIM_TAB = (By.XPATH, "//a[text()='Submit Claim']")
+    EVENT_DROPDOWN = (By.XPATH, "(//div[@class='oxd-select-text oxd-select-text--active'])[1]")
+    EVENT_SELECT = (By.XPATH, "//div[@role='option'][2]")
+    CURRENCY_DROPDOWN = (By.XPATH, "(//div[@class='oxd-select-text oxd-select-text--active'])[2]")
+    CURRENCY_SELECT = (By.XPATH, "//div[@role='option'][2]")
+    REMARKS_TEXTAREA = (By.XPATH, "//textarea")
+    SUBMIT_BUTTON = (By.XPATH, "//button[@type='submit']")
 
-    ASSIGN_CLAIM = (
-        By.XPATH,
-        "//button[contains(.,'Create Claim')]"
-    )
+    HISTORY_TABLE = (By.CLASS_NAME, "oxd-table-body")
 
-    CLAIM_AMOUNT = (
-        By.XPATH,
-        "//input[@name='amount']"
-    )
+    def initiate_expense_claim(self, remarks):
+        self.click_element(self.SUBMIT_CLAIM_TAB)
+        self.click_element(self.EVENT_DROPDOWN)
+        self.click_element(self.EVENT_SELECT)
 
-    REASON = (
-        By.XPATH,
-        "//textarea"
-    )
+        self.enter_text(self.REMARKS_TEXTAREA, remarks)
+        self.click_element(self.SUBMIT_BUTTON)
+        time.sleep(2.0)
 
-    SUBMIT_BUTTON = (
-        By.XPATH,
-        "//button[@type='submit']"
-    )
+    def is_claim_submitted_in_history(self):
+        return self.is_element_displayed(self.HISTORY_TABLE)
 
 
-    def create_claim(
-            self,
-            amount,
-            reason
-    ):
-
-        self.click(
-            self.ASSIGN_CLAIM
-        )
-
-        self.enter_text(
-            self.CLAIM_AMOUNT,
-            amount
-        )
-
-        self.enter_text(
-            self.REASON,
-            reason
-        )
-
-        self.click(
-            self.SUBMIT_BUTTON
-        )
-
-
-
-#Test Case 10
-
+import os
+import csv
+import pytest
 from pages.login_page import LoginPage
+from pages.dashboard_page import DashboardPage
+from pages.admin_page import AdminPage
+from pages.my_info_page import MyInfoPage
+from pages.leave_page import LeavePage
 from pages.claim_page import ClaimPage
 
-from utilities.config import (
-    BASE_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-)
+
+def get_csv_login_data():
+    """Helper method executing programmatic context reading operations over CSV payloads."""
+    path = os.path.join(os.path.dirname(__file__), "../data/login_data.csv")
+    dataset = []
+    with open(path, str('r')) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            dataset.append((row['username'], row['password'], row['status']))
+    return dataset
 
 
-class TestClaim:
+@pytest.mark.usefixtures("setup")
+class TestOrangeHRMSuite:
+
+    @pytest.fixture(autouse=True)
+    def initialize_page_objects(self):
+        self.login_page = LoginPage(self.driver)
+        self.dashboard_page = DashboardPage(self.driver)
+        self.admin_page = AdminPage(self.driver)
+        self.my_info_page = MyInfoPage(self.driver)
+        self.leave_page = LeavePage(self.driver)
+        self.claim_page = ClaimPage(self.driver)
+        self.base_url = "https://opensource-demo.orangehrmlive.com"
+
+    @pytest.mark.parametrize("user, pwd, expectation", get_csv_login_data())
+    def test_case_01_data_driven_login(self, user, pwd, expectation):
+        self.logger.info(f"Test Case 1: Running Login iteration profiles -> User: {user}, Context: {expectation}")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login(user, pwd)
+
+        if expectation == "valid":
+            assert "dashboard" in self.driver.current_url.lower(), "Expected validation routing targets missed."
+            self.dashboard_page.logout()
+        else:
+            assert self.login_page.is_element_displayed(
+                LoginPage.ERROR_MESSAGE), "Expected authentication failure banner text omitted."
+
+    def test_case_02_url_accessibility(self):
+        self.logger.info("Test Case 2: Checking accessibility routes.")
+        self.login_page.open_url(self.base_url)
+        assert "orangehrmlive" in self.login_page.get_current_url(), "Core endpoint navigation route broke synchronization down."
+
+    def test_case_03_fields_visibility(self):
+        self.logger.info("Test Case 3: Validating active input states on landing interface.")
+        self.login_page.open_url(self.base_url)
+        assert self.login_page.verify_fields_visible(), "Core authentication input hooks are missing from DOM layout structure."
+
+    def test_case_04_menu_items_functional_check(self):
+        self.logger.info("Test Case 4: Verifying cross-functional capabilities inside system navigation bar headers.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+
+        menus = ["Admin", "PIM", "Leave", "Time", "Recruitment", "My Info", "Performance", "Dashboard"]
+        for target in menus:
+            assert self.dashboard_page.verify_menu_item(
+                target), f"Essential header components target reference missing: {target}"
+        self.dashboard_page.logout()
+
+    def test_case_05_create_and_validate_new_user(self):
+        self.logger.info("Test Case 5: Orchestrating profile records instantiation routines.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+        self.dashboard_page.click_menu_item("Admin")
+
+        # Deploy context configurations mapping standard test user criteria
+        self.admin_page.add_user("m", "AutomatedTesterSuiteX1", "SecureAccessPass123!")
+        self.dashboard_page.logout()
+
+        # Validate authentication performance targeting newly configured profiles
+        self.login_page.login("AutomatedTesterSuiteX1", "SecureAccessPass123!")
+        assert "dashboard" in self.driver.current_url.lower(), "Newly provisioned test profile failed to pass authorization layers."
+        self.dashboard_page.logout()
+
+    def test_case_06_admin_search_verification(self):
+        self.logger.info("Test Case 6: Searching generated context models inside structural tracking directories.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+        self.dashboard_page.click_menu_item("Admin")
+
+        is_found = self.admin_page.search_for_user("AutomatedTesterSuiteX1")
+        assert is_found, "The test profile configuration records could not be recovered from the active dataset views layer."
+        self.dashboard_page.logout()
+
+    def test_case_07_forgot_password_verification(self):
+        self.logger.info(
+            "Test Case 7: Validating programmatic logic path patterns inside Forgot Password recovery maps.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.click_forgot_password()
+        self.login_page.submit_password_reset("Admin")
+        assert self.login_page.is_reset_confirmation_displayed(), "Password reset verification tracking indicators missing."
+
+    def test_case_08_my_info_sections_check(self):
+        self.logger.info("Test Case 8: Tracking access routes across core personal profile layouts.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+        self.dashboard_page.click_menu_item("My Info")
+
+        submenus = ["Personal Details", "Contact Details", "Emergency Contacts"]
+        for section in submenus:
+            assert self.my_info_page.verify_submenu_clickable(
+                section), f"Sub-menu target section error indicator: {section}"
+        self.dashboard_page.logout()
+
+    def test_case_09_assign_leave_transaction(self):
+        self.logger.info("Test Case 9: Confirming system action capabilities for employee time-off allocations.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+        self.dashboard_page.click_menu_item("Leave")
+
+        success = self.leave_page.assign_employee_leave("m")
+        assert success, "Execution failed to create transaction records matching target operations."
+        self.dashboard_page.logout()
+
+    def test_case_10_initiate_claim_request(self):
+        self.logger.info(
+            "Test Case 10: Launching programmatic asset verification routines targeting corporate expense reports.")
+        self.login_page.open_url(self.base_url)
+        self.login_page.login("Admin", "admin123")
+        self.dashboard_page.click_menu_item("Claim")
+
+        self.claim_page.initiate_expense_claim("Automation Testing Execution Reimbursement Framework Payload")
+        assert self.claim_page.is_claim_submitted_in_history(), "The generated claim validation asset was omitted from database logging files tracking lists."
+        self.dashboard_page.logout()
 
 
-    def test_create_claim(
-            self,
-            driver
-    ):
 
-        login_page = LoginPage(driver)
-
-        login_page.open(BASE_URL)
-
-        login_page.login(
-            ADMIN_USERNAME,
-            ADMIN_PASSWORD
-        )
-
-        claim_page = ClaimPage(driver)
-
-        claim_page.click(
-            claim_page.CLAIM_MENU
-        )
-
-        claim_page.create_claim(
-            "500",
-            "Travel expenses"
-        )
-
-        assert "claim" in driver.current_url.lower()

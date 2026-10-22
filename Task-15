@@ -1,1 +1,126 @@
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+class LoginPage:
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+        # Locators
+        self.username_input = (By.NAME, "username")
+        self.password_input = (By.NAME, "password")
+        self.login_button = (By.XPATH, "//button[@type='submit']")
+        self.dashboard_header = (By.XPATH, "//h6[text()='Dashboard']")
+
+    def enter_username(self, username):
+        element = self.wait.until(EC.visibility_of_element_located(self.username_input))
+        element.clear()
+        element.send_keys(username)
+
+    def enter_password(self, password):
+        element = self.wait.until(EC.visibility_of_element_located(self.password_input))
+        element.clear()
+        element.send_keys(password)
+
+    def click_login(self):
+        element = self.wait.until(EC.element_to_be_clickable(self.login_button))
+        element.click()
+
+    def is_login_successful(self):
+        try:
+            self.wait.until(EC.visibility_of_element_located(self.dashboard_header))
+            return True
+        except:
+            return False
+
+
+import os
+import pytest
+from datetime import datetime
+from selenium import webdriver
+from openpyxl import load_workbook, Workbook
+from login_page import LoginPage
+
+EXCEL_FILE = "test_data.xlsx"
+
+
+def create_initial_excel():
+    if not os.path.exists(EXCEL_FILE):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "LoginTestData"
+
+        headers = ["Test ID", "Username", "Password", "Date", "Time of Test", "Name of Tester", "Test Result"]
+        ws.append(headers)
+
+        data = [
+            ["TC_01", "Admin", "admin123", "", "", "Tester_Alpha", ""],
+            ["TC_02", "InvalidUser1", "wrongpass", "", "", "Tester_Alpha", ""],
+            ["TC_03", "Admin", "wrongpass", "", "", "Tester_Alpha", ""],
+            ["TC_04", "InvalidUser2", "admin123", "", "", "Tester_Alpha", ""],
+            ["TC_05", "", "", "", "", "Tester_Alpha", ""]
+        ]
+        for row in data:
+            ws.append(row)
+        wb.save(EXCEL_FILE)
+
+
+create_initial_excel()
+
+
+def get_excel_data():
+    wb = load_workbook(EXCEL_FILE)
+    ws = wb["LoginTestData"]
+    data = []
+    for r in range(2, 7):
+        test_id = ws.cell(row=r, column=1).value
+        username = ws.cell(row=r, column=2).value or ""
+        password = ws.cell(row=r, column=3).value or ""
+        data.append((r, test_id, username, password))
+    return data
+
+
+@pytest.fixture(scope="function")
+def driver():
+    options = webdriver.ChromeOptions()
+    driver = webdriver.Chrome(options=options)
+    driver.maximize_window()
+    yield driver
+    driver.quit()
+
+
+@pytest.mark.parametrize("row_idx, test_id, username, password", get_excel_data())
+def test_orangehrm_login(driver, row_idx, test_id, username, password):
+    driver.get("https://opensource-demo.orangehrmlive.com/web/index.php/auth/login")
+
+    login_pg = LoginPage(driver)
+
+    login_pg.enter_username(username)
+    login_pg.enter_password(password)
+    login_pg.click_login()
+
+    success = login_pg.is_login_successful()
+    result_text = "Test Passed" if success else "Test Failed"
+
+    now = datetime.now()
+    current_date = now.strftime("%Y-%m-%d")
+    current_time = now.strftime("%H:%M:%S")
+
+    wb = load_workbook(EXCEL_FILE)
+    ws = wb["LoginTestData"]
+
+    ws.cell(row=row_idx, column=4, value=current_date)
+    ws.cell(row=row_idx, column=5, value=current_time)
+    ws.cell(row=row_idx, column=7, value=result_text)
+
+    wb.save(EXCEL_FILE)
+
+    if test_id == "TC_01":
+        assert success, f"Expected successful login for {test_id}"
+    else:
+        assert not success, f"Expected failed login for {test_id}"
+
+
 

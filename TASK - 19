@@ -1,1 +1,50 @@
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Variables ***
+# Application URL
+${URL}              https://robotsparebinindustries.com/
+
+# Valid login credentials for the demo application
+${USERNAME}         maria
+${PASSWORD}         thompson
+
+# Browser configuration
+${BROWSER}          Chrome
+
+# Login page locators
+${USERNAME_FIELD}   id=username
+${PASSWORD_FIELD}   id=password
+${LOGIN_BUTTON}     id=login-button
+
+# Landing page locator
+${LOGOUT_BUTTON}   id=logout-button
+
+*** Keywords ***
+# Open the browser and navigate to the application
+Open Application Browser
+    Open Browser    ${URL}    ${BROWSER}
+    Maximize Browser Window
+    Wait Until Element Is Visible    ${USERNAME_FIELD}
+
+# Enter valid credentials and submit the login form
+Login
+    [Arguments]    ${username}    ${password}
+    Input Text        ${USERNAME_FIELD}    ${username}
+    Input Password   ${PASSWORD_FIELD}    ${password}
+    Click Button     ${LOGIN_BUTTON}
+
+# Verify successful login by checking the Logout button
+Verify Login
+    Wait Until Element Is Visible    ${LOGOUT_BUTTON}
+    Element Should Be Visible       ${LOGOUT_BUTTON}
+
+# Log out from the application
+Logout
+    Click Button    ${LOGOUT_BUTTON}
+    Wait Until Element Is Visible    ${USERNAME_FIELD}
+
+# Close all browser windows after the test
+Close Application Browser
+    Close All Browsers
 

@@ -1,1 +1,90 @@
+*** Test Cases ***
+
+
+*** Settings ***
+Documentation    Automation test suite for Sauce Demo application
+Library        SeleniumLibrary
+Resource       ../resources/keywords.robot
+# Open Sauce Demo
+# Close Sauce Demo
+
+*** Test Cases ***
+TC01 - Login With Valid Credentials
+    [Documentation]    Verify login using valid credentials and navigate to Products page
+    [Tags]    Login    Positive
+
+    # Perform login using valid username and password
+    Login With Valid Credentials
+
+    # Verify the Products page is displayed
+    Verify Products Page
+
+TC02 - Login With Invalid Credentials
+    [Documentation]    Verify login error for invalid credentials
+    [Tags]    Login    Negative
+
+    # Return to login page
+    Go To    ${URL}
+
+    # Attempt login with invalid credentials
+    Login With Credentials    ${INVALID_USERNAME}    ${INVALID_PASSWORD}
+
+    # Verify an error message is displayed
+    Verify Login Error Message
+
+TC03 - Add Product To Cart
+    [Documentation]    Verify a product can be added to the cart
+    [Tags]    Cart    Positive
+
+    # Return to login page and login
+    Go To    ${URL}
+    Login With Valid Credentials
+
+    # Verify Products page
+    Verify Products Page
+
+    # Add Backpack to cart
+    Add Product To Cart    ${PRODUCT_1}
+
+    # Open cart
+    Open Shopping Cart
+
+    # Verify Backpack is displayed in the cart
+    Verify Product In Cart    ${PRODUCT_1}
+
+TC04 - Add Multiple Products And Checkout
+    [Documentation]    Verify multiple products are listed in checkout summary
+    [Tags]    Checkout    Positive
+
+    # Return to login page and login
+    Go To    ${URL}
+    Login With Valid Credentials
+
+    # Add multiple products to cart
+    Add Product To Cart    ${PRODUCT_1}
+    Add Product To Cart    ${PRODUCT_2}
+    Add Product To Cart    ${PRODUCT_3}
+
+    # Open cart
+    Open Shopping Cart
+
+    # Verify products are listed in cart
+    Verify Product In Cart    ${PRODUCT_1}
+    Verify Product In Cart    ${PRODUCT_2}
+    Verify Product In Cart    ${PRODUCT_3}
+
+    # Proceed to checkout
+    Proceed To Checkout
+
+    # Enter checkout details
+    Enter Checkout Information
+
+    # Verify checkout summary
+    Verify Checkout Summary
+
+    # Verify all three products are displayed
+    Verify Checkout Products
+    ...    ${PRODUCT_1}
+    ...    ${PRODUCT_2}
+    ...    ${PRODUCT_3}
 
